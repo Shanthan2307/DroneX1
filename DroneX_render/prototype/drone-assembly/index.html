@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DroneX</title>
+    <meta name="description" content="Build real drones part by part, swap parts, and see whether they fly." />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="3D drone assembly"></canvas>
+
+    <header class="brand">
+      <h1 aria-label="DroneX"></h1><!-- the logo is set by src/ui/shell.js (bundled asset URL) -->
+      <p>Click the ghost to build the next part · click a part for details · <kbd>Space</kbd> explode · <kbd>B</kbd> build all · <kbd>R</kbd> reset · <kbd>[</kbd> <kbd>]</kbd> change drone</p>
+    </header>
+
+    <aside class="detail" id="detail" aria-live="polite"></aside>
+
+    <div class="dx-now" id="dx-now" aria-label="Current drone"></div>
+
+    <div class="hud" id="hud"><span id="hud-text">Pad ready</span></div>
+
+    <footer class="bar">
+      <button id="btn-vehicles" type="button" class="quiet" aria-expanded="false" aria-controls="vehicles">Hangar</button>
+      <div class="vehicles" id="vehicles" role="dialog" aria-label="Hangar" hidden></div>
+      <button id="btn-build-all" type="button">Build all</button>
+      <button id="btn-test" type="button" class="quiet" aria-controls="vehicles">Test</button>
+      <button id="btn-fly" type="button" class="quiet" disabled>Fly in simulation</button>
+      <button id="btn-explode" type="button" disabled>Explode</button>
+      <button id="btn-reset" type="button" class="quiet">Reset</button>
+    </footer>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,2 @@
+!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{};e._posthogReleaseId=e._posthogReleaseId||"01a16ad0-d637-0000-1d79-c6d982d50b48";var n=(new e.Error).stack;n&&(e._posthogChunkIds=e._posthogChunkIds||{},e._posthogChunkIds[n]="8b9228f8-ac67-5604-a069-1a2dffcc282d")}catch(e){}}();import{VehiclesPage as e}from"./VehiclesPage-D3jrDETb.js";var t=e;export{t as component};
+//# chunkId=8b9228f8-ac67-5604-a069-1a2dffcc282d

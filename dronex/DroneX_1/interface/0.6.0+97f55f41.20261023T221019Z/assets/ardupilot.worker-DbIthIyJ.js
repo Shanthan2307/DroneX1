@@ -1,0 +1,154 @@
+!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof globalThis?globalThis:"undefined"!=typeof self?self:{};e._posthogReleaseId=e._posthogReleaseId||"01a16ad0-d637-0000-1d79-c6d982d50b48";var n=(new e.Error).stack;n&&(e._posthogChunkIds=e._posthogChunkIds||{},e._posthogChunkIds[n]="2c920533-fb1f-596d-84d7-b13d80907eb7")}catch(e){}}();function e(e,t){let n=JSON.parse(`{
+  "schemaVersion": 1,
+  "programs": {
+    "arducopter": { "frames": {} },
+    "arducopter-heli": { "frames": {} },
+    "arduplane": {
+      "frames": {
+        "plane-jet": {
+          "AIRSPEED_CRUISE": 50,
+          "AIRSPEED_MAX": 80,
+          "AIRSPEED_MIN": 25,
+          "TRIM_THROTTLE": 45,
+          "THR_MAX": 100,
+          "THR_SLEWRATE": 100,
+          "TKOFF_THR_MAX": 100,
+          "TKOFF_ROTATE_SPD": 20,
+          "TKOFF_DIST": 1500,
+          "TKOFF_LVL_ALT": 3,
+          "TKOFF_OPTIONS": 1,
+          "PTCH_LIM_MAX_DEG": 20,
+          "PTCH_LIM_MIN_DEG": -25,
+          "ROLL_LIMIT_DEG": 55,
+          "LEVEL_ROLL_LIMIT": 0,
+          "SCALING_SPEED": 40,
+          "NAVL1_PERIOD": 25,
+          "WP_LOITER_RAD": 400,
+          "WP_RADIUS": 220,
+          "RTL_ALTITUDE": 200,
+          "FBWB_CLIMB_RATE": 5,
+          "TECS_CLMB_MAX": 15,
+          "TECS_SINK_MAX": 8.5,
+          "TECS_SINK_MIN": 2,
+          "TECS_RLL2THR": 5,
+          "TECS_TIME_CONST": 7,
+          "TECS_PTCH_DAMP": 0.8,
+          "TECS_VERT_ACC": 15,
+          "TECS_LAND_ARSPD": 30,
+          "LAND_FLARE_SEC": 2,
+          "PTCH2SRV_RLL": 1.04,
+          "PTCH_RATE_P": 0.09,
+          "PTCH_RATE_I": 0.5,
+          "PTCH_RATE_D": 0,
+          "PTCH_RATE_FF": 0.69,
+          "PTCH_RATE_IMAX": 0.666667,
+          "RLL2SRV_RMAX": 70,
+          "RLL_RATE_P": 0.08,
+          "RLL_RATE_I": 0.15,
+          "RLL_RATE_D": 0.004,
+          "RLL_RATE_FF": 0.345,
+          "RLL_RATE_IMAX": 0.666667
+        }
+      }
+    },
+    "ardurover": {
+      "frames": {
+        "rover": {
+          "MANUAL_STR_EXPO": 0.35,
+          "MANUAL_OPTIONS": 1,
+          "ACRO_TURN_RATE": 60
+        },
+        "rover-skid": {
+          "MANUAL_STR_EXPO": 0.35,
+          "ACRO_TURN_RATE": 60
+        },
+        "motorboat": {
+          "MANUAL_STR_EXPO": 0.35,
+          "MANUAL_OPTIONS": 1,
+          "ACRO_TURN_RATE": 60
+        },
+        "motorboat-skid": {
+          "MANUAL_STR_EXPO": 0.35,
+          "ACRO_TURN_RATE": 60
+        }
+      }
+    },
+    "ardusub": { "frames": {} },
+    "blimp": {
+      "frames": {
+        "blimp-motor": {
+          "LOIT_MAX_POSX": 1,
+          "LOIT_MAX_POSY": 0.7,
+          "LOIT_MAX_POSZ": 0.5,
+          "LOIT_MAX_VELX": 1,
+          "LOIT_MAX_VELY": 0.7,
+          "LOIT_MAX_VELZ": 0.5
+        },
+        "blimp-motor-inspection-v1": {
+          "FINS_THR_MAX": 1,
+          "LOIT_POS_LAG": 6,
+          "LOIT_MAX_POSX": 8,
+          "LOIT_MAX_POSY": 1.5,
+          "LOIT_MAX_POSZ": 0.75,
+          "LOIT_MAX_POSYAW": 0.2,
+          "LOIT_MAX_VELX": 8,
+          "LOIT_MAX_VELY": 1.5,
+          "LOIT_MAX_VELZ": 0.75,
+          "LOIT_MAX_VELYAW": 0.2,
+          "LOIT_POSX_P": 0.2,
+          "LOIT_POSY_P": 0.1,
+          "LOIT_POSZ_P": 0.5,
+          "LOIT_POSYAW_P": 0.2,
+          "LOIT_VELX_P": 0.8,
+          "LOIT_VELX_I": 0.02,
+          "LOIT_VELX_FF": 0.1,
+          "LOIT_VELX_D": 0,
+          "LOIT_VELX_IMAX": 1,
+          "LOIT_VELY_P": 1.3,
+          "LOIT_VELY_I": 0.02,
+          "LOIT_VELY_FF": 0.33,
+          "LOIT_VELY_D": 0,
+          "LOIT_VELY_IMAX": 1,
+          "LOIT_VELZ_P": 1.5,
+          "LOIT_VELZ_I": 0.15,
+          "LOIT_VELZ_D": 0,
+          "LOIT_VELZ_IMAX": 1,
+          "LOIT_VELYAW_P": 6,
+          "LOIT_VELYAW_I": 0.02,
+          "LOIT_VELYAW_D": 0,
+          "LOIT_VELYAW_IMAX": 1
+        }
+      }
+    }
+  }
+}
+`);if(n.schemaVersion!==1)throw Error(`Unsupported simulation profile schema`);let r=n.programs[e];if(!r)throw Error(`Missing simulation profile for ${e}`);let i=r.frames[t];return i?Object.entries(i).sort(([e],[t])=>e.localeCompare(t)).map(([n,r])=>{if(!/^[A-Z0-9_]{1,16}$/.test(n)||!Number.isFinite(r))throw Error(`Invalid simulation profile parameter ${e}/${t}/${n}`);return`${n} ${r}\n`}).join(``):``}const t=16384,n={copter:`ARMING_SKIPCHK 64
+FS_THR_ENABLE 0
+`,"copter-heli":`ARMING_SKIPCHK 64
+FS_THR_ENABLE 0
+`,plane:`ARMING_SKIPCHK 64
+THR_FAILSAFE 0
+`,rover:`ARMING_SKIPCHK 64
+FS_THR_ENABLE 0
+`,sub:`ARMING_SKIPCHK 64
+`,blimp:`ARMING_SKIPCHK 64
+FS_THR_ENABLE 0
+`},r=self;let i;const a=new BigInt64Array(new SharedArrayBuffer(8)),o=()=>BigInt(Math.round((performance.timeOrigin+performance.now())*1e3));function s(e){let t=Atomics.load(a,0);e&&t>=0n?Atomics.store(a,0,t-o()):!e&&t<0n&&Atomics.store(a,0,o()+t)}function c(){let e=URL.createObjectURL(new Blob([`
+let clock;
+const origin = performance.timeOrigin;
+const now = performance.now.bind(performance);
+const date = Date.now;
+const behind = () => {
+  if (!clock) return 0;
+  const at = Atomics.load(clock, 0);
+  return at < 0n ? origin + now() + Number(at) / 1000 : Number(at) / 1000;
+};
+performance.now = () => now() - behind();
+Date.now = () => Math.floor(date() - behind());
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.uxduckClock) clock = event.data.uxduckClock;
+});
+`],{type:`text/javascript`})),t=Worker;self.Worker=class extends t{constructor(t,n){let r=`import ${JSON.stringify(e)};\nimport ${JSON.stringify(String(t))};\n`;super(URL.createObjectURL(new Blob([r],{type:`text/javascript`})),n),super.postMessage({uxduckClock:a})}}}async function l(a){if(!crossOriginIsolated){r.postMessage({down:`this page is not cross-origin isolated`});return}let o=a.program===`blimp`?`blimp`:`ardu${a.program}`;if(a.model===`blimp-motor-inspection-v1`){let e=await fetch(`${a.base}frames.json`);if(!e.ok)throw Error(`Inspection airship simulator metadata is missing. Update the simulator builds.`);let t=await e.json();if(t.schemaVersion!==1||!t.programs?.blimp?.includes(a.model))throw Error(`This simulator build does not support the inspection airship. Update the simulator builds.`)}let s=n[a.program]+e(o,a.model),{default:l}=await import(
+/* @vite-ignore */
+`${a.base}${o}.js`),u=[a.latitudeDeg,a.longitudeDeg,a.altitudeM,a.headingDeg].join(`,`);c();let d=await l({arguments:[`--model=${a.model}`,`--home=${u}`,`--speedup=${a.speedup}`,`--instance=${a.sysid-1}`,`--sysid=${a.sysid}`,`--defaults=uxduck.parm`,`--serial0=wasm`,`--serial1=none`,`--serial2=none`],preRun:[e=>e.FS.writeFile(`uxduck.parm`,s)],print:()=>void 0,printErr:()=>void 0}),f=d.cwrap(`ardupilot_serial_read`,`number`,[`number`,`number`,`number`]),p=d.cwrap(`ardupilot_serial_write`,`number`,[`number`,`number`,`number`]),m=d.cwrap(`ardupilot_malloc`,`number`,[`number`]),h=m(t),g=m(t);i=e=>{for(let n=0;n<e.length;n+=t){let r=e.subarray(n,n+t);d.HEAPU8.set(r,g),p(0,g,r.length)}},r.postMessage({up:!0}),setInterval(()=>{let e=f(0,h,t);if(e<=0)return;let n=d.HEAPU8.slice(h,h+e);r.postMessage(n,[n.buffer])},10)}r.addEventListener(`message`,e=>{let t=e.data;t instanceof Uint8Array?i?.(t):typeof t.pause==`boolean`?s(t.pause):t.start&&l(t.start).catch(e=>r.postMessage({down:e instanceof Error?e.message:String(e)}))});
+//# chunkId=2c920533-fb1f-596d-84d7-b13d80907eb7

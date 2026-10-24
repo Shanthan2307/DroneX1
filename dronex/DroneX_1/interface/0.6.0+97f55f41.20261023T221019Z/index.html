@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- This page's interface (S109): the build writes its id, the dev server "dev". -->
+    <meta name="uxduck-interface" content="0.6.0+97f55f41.20261023T221019Z" />
+    <link rel="icon" href="/favicon.svg?v=duck" type="image/svg+xml" />
+    <title>DroneX</title>
+    <!--
+      Warm start (ADR-0009): apply the saved appearance before any bundle
+      loads, so the first paint already has the right theme, density and
+      sidebar. Mirrors applyAppearance in src/app/appearance.ts.
+    -->
+    <script>
+      (function () {
+        try {
+          var a = JSON.parse(localStorage.getItem("uxduck.appearance") || "{}") || {};
+          var d = document.documentElement.dataset;
+          if (a.theme === "light" || a.theme === "dark") d.theme = a.theme;
+          // A colour theme (S166); a custom one's CSS is kept beside it.
+          var c = a.colorTheme;
+          if (typeof c === "string" && /^[a-z0-9-]{1,40}$/.test(c) && c !== "default") {
+            d.colorTheme = c;
+            try {
+              var t = JSON.parse(localStorage.getItem("uxduck.themeCss") || "null");
+              if (
+                t &&
+                t.id === c &&
+                typeof t.css === "string" &&
+                !/[<\\]|url\(|@import/i.test(t.css)
+              ) {
+                var s = document.createElement("style");
+                s.id = "uxduck-color-theme";
+                s.textContent = t.css;
+                document.head.appendChild(s);
+              }
+            } catch (e) {}
+          }
+          if (a.density === "compact") d.density = "compact";
+          if (a.surface === "glass" || a.surface === "solid") d.surface = a.surface;
+          if (a.sidebarCollapsed === true) d.sidebar = "collapsed";
+          var w = a.sidebarWidth;
+          if (typeof w === "number" && isFinite(w)) {
+            w = Math.round(Math.min(420, Math.max(224, w)));
+            if (w !== 256) document.documentElement.style.setProperty("--sidebar-width", w + "px");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <!--
+      A broken interface (S109): when the app fails to load, or throws before
+      its first screen says it is ready (src/services/interface.ts), tell the
+      DroneX that served it, which goes back to the previous version, and
+      offer a reload. Only a page an installed DroneX serves reports.
+    -->
+    <script>
+      (function () {
+        var meta = document.querySelector('meta[name="uxduck-interface"]');
+        var version = meta ? meta.content : "dev";
+        var host = location.hostname;
+        if (version === "dev" || (host !== "127.0.0.1" && host !== "localhost" && host !== "[::1]"))
+          return;
+        var done = false;
+        window.__uxduckInterfaceReady = function () {
+          done = true;
+        };
+        var ours = function (url) {
+          return typeof url === "string" && url.indexOf(location.origin + "/") === 0;
+        };
+        var failed = function (error) {
+          if (done) return;
+          done = true;
+          try {
+            fetch("/interface/boot-failed", {
+              method: "POST",
+              keepalive: true,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ version: version, error: String(error).slice(0, 300) }),
+            }).catch(function () {});
+          } catch (e) {}
+          var show = function () {
+            var root = document.getElementById("root");
+            if (!root) return;
+            root.innerHTML =
+              '<main class="boot-failed"><p>DroneX couldn’t start this version. Going back to the previous one…</p><button type="button">Reload</button></main>';
+            root.querySelector("button").addEventListener("click", function () {
+              location.reload();
+            });
+          };
+          if (document.readyState === "loading")
+            document.addEventListener("DOMContentLoaded", show);
+          else show();
+        };
+        addEventListener(
+          "error",
+          function (event) {
+            var target = event.target;
+            if (target && target !== window) {
+              var kind = target.tagName;
+              var url = target.src || target.href;
+              var code =
+                kind === "SCRIPT" ||
+                (kind === "LINK" && /stylesheet|modulepreload/.test(target.rel));
+              if (code && ours(url)) failed("could not load " + url.slice(location.origin.length));
+              return;
+            }
+            if (ours(event.filename)) failed((event.error && event.error.message) || event.message);
+          },
+          true,
+        );
+        addEventListener("unhandledrejection", function (event) {
+          var reason = event.reason;
+          var text = String((reason && reason.message) || reason);
+          // A chunk that would not load: the interface itself is broken.
+          if (/dynamically imported module|Importing a module script failed/.test(text))
+            failed(text);
+        });
+      })();
+    </script>
+    <style>.boot-failed{flex-direction:column;align-items:flex-start;gap:12px;max-width:32rem;margin:15vh auto 0;padding:0 16px;font:15px/1.5 system-ui,sans-serif;display:flex}@media (prefers-color-scheme:dark){html:not([data-theme=light]) .boot-failed{color:#f4f4f5}}html[data-theme=dark] .boot-failed{color:#f4f4f5}</style>
+    <script type="module" crossorigin src="/assets/index-58pLTjGe.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-COiEfhsA.js">
+    <link rel="modulepreload" crossorigin href="/assets/shell-Y4cT0_Eb.js">
+    <link rel="modulepreload" crossorigin href="/assets/matchContext-CBxLo3FM.js">
+    <link rel="modulepreload" crossorigin href="/assets/useRouter-CtvnNuGQ.js">
+    <link rel="modulepreload" crossorigin href="/assets/link-BUgUXQfM.js">
+    <link rel="modulepreload" crossorigin href="/assets/useMatch-DUH3cL-G.js">
+    <link rel="modulepreload" crossorigin href="/assets/useParams-DZuTihom.js">
+    <link rel="modulepreload" crossorigin href="/assets/useNavigate-CBK4_IfC.js">
+    <link rel="modulepreload" crossorigin href="/assets/lazyRouteComponent-r1-efGJ6.js">
+    <link rel="modulepreload" crossorigin href="/assets/useRouterState-Dko_tDdT.js">
+    <link rel="modulepreload" crossorigin href="/assets/react-dom-DjhSGG-e.js">
+    <link rel="modulepreload" crossorigin href="/assets/dist-D-kg-7Kl.js">
+    <link rel="modulepreload" crossorigin href="/assets/cn-CoHJgTJ5.js">
+    <link rel="modulepreload" crossorigin href="/assets/Button-DRm7Afvb.js">
+    <link rel="modulepreload" crossorigin href="/assets/lazyParts-DoIQ98M4.js">
+    <link rel="modulepreload" crossorigin href="/assets/IconBase.es-DnKrol1y.js">
+    <link rel="modulepreload" crossorigin href="/assets/vehicles-BI_UNq7c.js">
+    <link rel="modulepreload" crossorigin href="/assets/tslib.es6-C9q-_BX0.js">
+    <link rel="modulepreload" crossorigin href="/assets/Combination-D3T-cueU.js">
+    <link rel="modulepreload" crossorigin href="/assets/dist-Dm5JKItU.js">
+    <link rel="modulepreload" crossorigin href="/assets/fullscreen-CpS367xg.js">
+    <link rel="modulepreload" crossorigin href="/assets/getDaemon-BB_QL-Ne.js">
+    <link rel="modulepreload" crossorigin href="/assets/commands-HeIACrpZ.js">
+    <link rel="modulepreload" crossorigin href="/assets/palette-DUkI4DJE.js">
+    <link rel="modulepreload" crossorigin href="/assets/confirm-DU5J_-9J.js">
+    <link rel="modulepreload" crossorigin href="/assets/linked-C0CJUSe6.js">
+    <link rel="modulepreload" crossorigin href="/assets/search-Dqo_2sjI.js">
+    <link rel="modulepreload" crossorigin href="/assets/focusTab-BwUFP2-4.js">
+    <link rel="modulepreload" crossorigin href="/assets/engine-BT6Vkpk1.js">
+    <link rel="modulepreload" crossorigin href="/assets/units-CrtmqAB8.js">
+    <link rel="modulepreload" crossorigin href="/assets/video-F2tw2BJ0.js">
+    <link rel="modulepreload" crossorigin href="/assets/installed-BTTsgL2w.js">
+    <link rel="modulepreload" crossorigin href="/assets/closePage-CK9o0V6N.js">
+    <link rel="modulepreload" crossorigin href="/assets/keyboard-B9ocn2DY.js">
+    <link rel="modulepreload" crossorigin href="/assets/sim-DdqH6t1Z.js">
+    <link rel="modulepreload" crossorigin href="/assets/NeedsDesktop-VwM7ARH_.js">
+    <link rel="modulepreload" crossorigin href="/assets/mgrs.esm-CXXURkLX.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-D2Fl1Psb.css">
+    <!-- DroneX look (styling only); remove this line and the file to undo. -->
+    <link rel="stylesheet" href="/dronex-theme.css">
+  </head>
+  <body>
+    <div id="root">
+      <div class="splash" aria-hidden="true">
+        <div class="splash-sidebar"></div>
+        <div class="splash-card"></div>
+      </div>
+    </div>
+  </body>
+</html>

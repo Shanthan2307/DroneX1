@@ -1,0 +1,12 @@
+# One repo for both engines. Each folder keeps its own .gitignore too; these are the shared rules.
+node_modules/
+.next/
+.dev/
+target/
+.dronex/
+*.tsbuildinfo
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example

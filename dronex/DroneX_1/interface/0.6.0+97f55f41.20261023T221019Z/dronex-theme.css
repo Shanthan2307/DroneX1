@@ -1,0 +1,158 @@
+/*
+  DroneX look: a crisp, airy light theme for the dashboard. Styling only.
+  It re-points the interface's own design tokens (index-*.css) rather than
+  restyling components, so layout and behaviour stay the interface's.
+
+  `html:not(#dx)` outranks every theme selector in the bundle (light, dark,
+  colour themes, glass/solid), so this look holds whatever is picked in
+  Settings > Appearance. Delete this file and its <link> in index.html to undo.
+*/
+
+html:not(#dx) {
+  color-scheme: light;
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+
+  /* Surfaces: stark white, with the faintest grays for secondary cards. */
+  --chrome: #ffffff;
+  --canvas: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f6f6f7;
+  --glass: #ffffffd9;
+  --glass-dense: #fffffff2;
+  --glass-blur: blur(20px) saturate(160%);
+  --glass-highlight: inset 0 0 0 0 transparent;
+
+  /* Lines: hairline gray, never heavy. */
+  --hairline: #e7e7ea;
+  --hairline-glass: #0000000f;
+  --lip: transparent;
+
+  /* Type colours: crisp near-black text, soft grays for secondary. */
+  --text: #0b0b0f;
+  --text-2: #5f6168;
+  --text-3: #9a9ca3;
+
+  /* One accent. Primary buttons are accent-filled, not dark. */
+  --accent: #2563eb;
+  --action: #2563eb;
+  --action-lip: transparent;
+  --on-ink: #ffffff;
+  --selection: #2563eb1f;
+  --hover: #0000000a;
+  --pressed: #2563eb14;
+
+  /* Status colours, slightly brighter on white. */
+  --online: #16a34a;
+  --accepted: #16a34a;
+  --stale: #d97706;
+  --alarm: #dc2626;
+  --rejected: #dc2626;
+  --on-alarm: #ffffff;
+
+  /* Shadows: barely there; borders do the work. */
+  --shadow-float: 0 1px 2px #0000000a, 0 4px 16px #0000000a;
+  --shadow-overlay: 0 1px 2px #0000000d, 0 16px 48px #00000014;
+  --shadow-panel: 0 0 0 1px #e7e7ea, 0 1px 2px #00000008;
+
+  /* Floating bars and menus: solid white with a hairline. */
+  --float-fill: #ffffffe6;
+  --float-fill-dense: #fffffff5;
+  --float-border: #e7e7ea;
+
+  /* Typography: Inter or Geist where installed, else the system face. */
+  --font-sans: "Inter var", "Inter", "Geist", system-ui, -apple-system, "SF Pro Text",
+    "Segoe UI Variable Text", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --leading-body: 21px;
+  --leading-caption: 17px;
+  --text-title: 17px;
+  --leading-title: 24px;
+  --text-display: 30px;
+  --leading-display: 36px;
+  --text-page: 34px;
+  --leading-page: 1.15;
+
+  /* Softer, rounder geometry and a touch more air. */
+  --radius-control: 9px;
+  --radius-menu: 12px;
+  --radius-panel: 14px;
+  --control-height: 32px;
+  --control-height-sm: 28px;
+  --control-padding-x: 14px;
+  --menu-item-height: 32px;
+}
+
+/* Compact density keeps its own smaller sizes. */
+html[data-density=compact]:not(#dx) {
+  --leading-body: 18px;
+  --control-height: 28px;
+  --control-height-sm: 24px;
+  --control-padding-x: 10px;
+  --menu-item-height: 28px;
+}
+
+html:not(#dx) body {
+  font-feature-settings: "cv11", "ss01", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.006em;
+}
+
+/* Headings: tight tracking, confident weight. */
+html:not(#dx) :is(h1, h2, .text-page, .text-display) {
+  letter-spacing: -0.03em;
+  font-weight: 650;
+}
+html:not(#dx) :is(h3, .text-title) {
+  letter-spacing: -0.015em;
+}
+
+/* Cards on white: the side panel and each dock group get a hairline edge
+   (a shadow, so nothing moves) instead of sitting on a tinted backdrop. */
+html:not(#dx) section.rounded-control.bg-canvas,
+html:not(#dx) .dockview-theme-uxduck .dv-groupview {
+  box-shadow: 0 0 0 1px var(--hairline), 0 2px 8px #0000000a;
+}
+
+/* Dock tabs (Map, Cockpit, ...): a light pill for the open tab. */
+html:not(#dx) .dockview-theme-uxduck {
+  --dock-tab-selected: #f2f2f4;
+}
+
+/* Buttons that sat on a raised "lip": flat, with a hairline instead. */
+html:not(#dx) .shadow-\[0_2px_0_var\(--lip\)\] {
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
+html:not(#dx) .shadow-\[0_2px_0_var\(--action-lip\)\] {
+  box-shadow: 0 1px 2px #2563eb33;
+}
+
+/* Calm focus rings. */
+html:not(#dx) :focus-visible {
+  outline-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* Thin, quiet scrollbars. */
+html:not(#dx) * {
+  scrollbar-width: thin;
+  scrollbar-color: #d8d8dc transparent;
+}
+
+html:not(#dx) ::selection {
+  background: #2563eb2e;
+}
+
+/* Removed: the sidebar's Send feedback button. */
+html:not(#dx) button[aria-label="Send feedback"] {
+  display: none;
+}
+
+/* Removed: the "Ways to use DroneX" menu. The name stays, without its
+   chevron, and no longer opens anything. */
+html:not(#dx) button[aria-label="DroneX Desktop"][aria-haspopup="menu"] {
+  pointer-events: none;
+}
+html:not(#dx) button[aria-label="DroneX Desktop"][aria-haspopup="menu"] > svg {
+  display: none;
+}

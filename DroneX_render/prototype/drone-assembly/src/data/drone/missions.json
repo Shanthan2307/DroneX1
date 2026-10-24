@@ -1,0 +1,80 @@
+[
+  {
+    "id": "sub-250-urban-scan",
+    "name": "Sub-250g Urban Inspection",
+    "description": "FAA Part 107 Category 1 / EASA C0 compliant flight over urban structures. Strict <250g MTOW rule. Only the weight line is regulatory (FAA Category 1: \"0.55 pounds or less\", 249.5 g; EASA C0: under 250 g); the distance, time, lift and speed targets are this app's design targets.",
+    "targetDistance_km": 3,
+    "targetEndurance_min": 14,
+    "maxAllowableWeight_g": 249,
+    "requiredHoverTWR": 1.8,
+    "minCruiseSpeed_ms": 12,
+    "requiredPayloadId": "runcam-split-hd",
+    "environment": "urban_grid",
+    "source": "https://www.faa.gov/uas/commercial_operators/operations_over_people"
+  },
+  {
+    "id": "medical-delivery-15km",
+    "name": "15km Remote Medical Box Transit",
+    "description": "Rapid autonomous transit of 500g emergency medical supply between clinics over hilly terrain. The distance, time, weight, lift and speed targets are this app's design targets, not regulatory or published numbers: no source states them (TODO(source); the earlier WHO link was dead).",
+    "targetDistance_km": 15,
+    "targetEndurance_min": 18,
+    "maxAllowableWeight_g": 2800,
+    "requiredHoverTWR": 1.3,
+    "minCruiseSpeed_ms": 15,
+    "requiredPayloadId": "medical-capsule-500g",
+    "environment": "valley_ridge",
+    "source": ""
+  },
+  {
+    "id": "sar-thermal-grid-40min",
+    "name": "40-min Wilderness Search & Rescue",
+    "description": "Extended thermal sweep for lost hikers in dense forest with steady 20 knot mountain gusts. The targets are this app's design targets; the cited page states none of them (TODO(source)).",
+    "targetDistance_km": 8,
+    "targetEndurance_min": 40,
+    "maxAllowableWeight_g": 3500,
+    "requiredHoverTWR": 1.9,
+    "minCruiseSpeed_ms": 10,
+    "requiredPayloadId": "flir-boson-320",
+    "environment": "mountain_forest",
+    "source": "https://www.dji.com/enterprise/public-safety"
+  },
+  {
+    "id": "fpv-sprint-160kmh",
+    "name": "160 km/h Aerobatic FPV Sprint",
+    "description": "Extreme high-speed line through canyon gates demanding aggressive punch-out TWR and high discharge current. The targets are this app's design targets; the cited page states none of them (TODO(source)).",
+    "targetDistance_km": 4,
+    "targetEndurance_min": 5,
+    "maxAllowableWeight_g": 700,
+    "requiredHoverTWR": 4.5,
+    "minCruiseSpeed_ms": 44.4,
+    "requiredPayloadId": "runcam-split-hd",
+    "environment": "canyon_raceway",
+    "source": "https://thedroneracingleague.com/technology/"
+  },
+  {
+    "id": "longrange-fpv-10km",
+    "name": "10 km Long-Range FPV Ridge Run",
+    "description": "Out-and-back cruise along a mountain ridge on a GPS-equipped 7-inch FPV quad, flown in the EASA Open category A3 subcategory (under 25 kg, far from people). The distance, endurance and speed targets are this app's design targets for a long-range FPV flight, not regulatory numbers; only the 25 kg ceiling comes from the regulation.",
+    "targetDistance_km": 10,
+    "targetEndurance_min": 15,
+    "maxAllowableWeight_g": 25000,
+    "requiredHoverTWR": 3,
+    "minCruiseSpeed_ms": 15,
+    "requiredPayloadId": null,
+    "environment": "mountain_ridge",
+    "source": "https://www.easa.europa.eu/en/domains/drones-air-mobility/operating-drone/open-category-low-risk-civil-drones"
+  },
+  {
+    "id": "multispectral-survey-hex",
+    "name": "Multispectral Crop Survey",
+    "description": "Low, slow survey lines over farmland with a five-band multispectral camera, flown under FAA Part 107, which covers unmanned aircraft under 55 lb (24.9 kg). The distance, endurance and lift targets are this app's design targets for one survey sortie, not regulatory numbers; only the weight ceiling comes from the rule.",
+    "targetDistance_km": 5,
+    "targetEndurance_min": 15,
+    "maxAllowableWeight_g": 24947,
+    "requiredHoverTWR": 1.6,
+    "minCruiseSpeed_ms": 5,
+    "requiredPayloadId": "micasense-rededge-p",
+    "environment": "farmland",
+    "source": "https://www.ecfr.gov/current/title-14/chapter-I/subchapter-F/part-107"
+  }
+]

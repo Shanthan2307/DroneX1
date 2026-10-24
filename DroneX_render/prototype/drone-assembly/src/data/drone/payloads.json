@@ -1,0 +1,70 @@
+[
+  {
+    "id": "runcam-split-hd",
+    "name": "RunCam Split HD (DJI HD system)",
+    "type": "camera",
+    "weight_g": 19.9,
+    "power_W": 2.25,
+    "voltage_min_V": 5,
+    "voltage_max_V": 5,
+    "length_mm": 30,
+    "width_mm": 29,
+    "height_mm": null,
+    "source": "https://www.readymaderc.com/products/details/runcam-split-hd",
+    "notes": "There is no \"Split HD 4K Micro\": the RunCam Split HD records up to 2.7K for the DJI digital FPV system (discontinued; RunCam's own page is gone). Retailer spec list: \"2.7K@60fps\", \"Power Input: DC 5V\", \"Working Current: 450mA@5V(Max)\", \"Weight: 19.9g\", \"PCB Size: 29*30mm\", \"Lens Module Size: 19*19mm\". power_W = 5 V x 0.45 A = 2.25 W is DERIVED and is the maximum draw. Height: not published."
+  },
+  {
+    "id": "flir-boson-320",
+    "name": "FLIR Boson 320 Thermal Core",
+    "type": "thermal",
+    "weight_g": 7.5,
+    "power_W": 0.6,
+    "voltage_min_V": 3.3,
+    "voltage_max_V": 3.3,
+    "length_mm": 21,
+    "width_mm": 21,
+    "height_mm": 11,
+    "source": "https://www.oem.flir.com/products/boson/",
+    "notes": "Teledyne FLIR product page: Boson \"starting at 7.5 grams\", \"starting at 600 mW\", \"<4.9 cm³\". Datasheet (third-party copy: https://www.militarysystems-tech.com/sites/militarysystems/files/supplier_docs/Boson%20Datasheet%20-%20Teledyne%20FLIR.pdf): \"21 × 21 × 11 mm\" and \"7.5 g\" both WITHOUT lens, \"Input Voltage 3.3 VDC\", power \"as low as 500 mW\". The lens is not counted: lens weights are not published, so the real camera is heavier (TODO(source)). The earlier 35 g, 1.2 W, 3.3-5.5 V and 28 mm length had no source and the old URL is dead."
+  },
+  {
+    "id": "livox-mid-360",
+    "name": "Livox Mid-360 Compact 3D LiDAR",
+    "type": "lidar",
+    "weight_g": 265,
+    "power_W": 6.5,
+    "voltage_min_V": 9,
+    "voltage_max_V": 27,
+    "length_mm": 65,
+    "width_mm": 65,
+    "height_mm": 60,
+    "source": "https://www.livoxtech.com/mid-360/specs",
+    "notes": "Manufacturer spec page: \"265 g\", \"65×65×60 mm\", \"6.5 W (average)\", \"9 ~ 27 V DC\". 360-degree FOV compact LiDAR."
+  },
+  {
+    "id": "medical-capsule-500g",
+    "name": "500 g cargo pod (design mass, not a product)",
+    "type": "cargo",
+    "weight_g": 500,
+    "power_W": 0,
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null,
+    "source": "",
+    "notes": "NOT A REAL PRODUCT. The earlier record named an \"AeroAid 500g Emergency Medical Pod\" that does not exist, sourced to a dead WHO page. It is kept only as the medical-run mission's design payload: 500 g is this app's design target for that mission (like the mission's own distance and time), not a measurement. Dimensions: TODO(source), not published (the old 160 x 90 x 80 mm were invented). Replace with a real, published delivery box when one is chosen."
+  },
+  {
+    "id": "micasense-rededge-p",
+    "name": "MicaSense RedEdge-P Multispectral",
+    "type": "multispectral",
+    "weight_g": 363,
+    "power_W": 7,
+    "voltage_min_V": 7,
+    "voltage_max_V": 25.2,
+    "length_mm": 89,
+    "width_mm": 70,
+    "height_mm": 67,
+    "source": "https://www.jouav.com/products/micasense-rededge-p.html",
+    "notes": "Spec page: \"363 g (12.8 oz.)\" for RedEdge-P + Wi-Fi + CF Express card + DLS2 sun sensor and cables (the flying install), \"8.9 x 7.0 x 6.7 cm\", \"5.5/7.0/10W (standby, average, peak)\" (the 7.0 W average is used), external power 7.0-25.2 V. The camera alone is 300 g with DLS 2 per other resellers."
+  }
+]

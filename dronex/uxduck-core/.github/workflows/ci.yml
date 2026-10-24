@@ -1,0 +1,38 @@
+name: Core CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config libudev-dev
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Unit, contract and daemon/CLI/MCP smoke tests
+        run: cargo test --workspace --locked --no-fail-fast
+        timeout-minutes: 20
+      - run: cargo check --locked --target wasm32-unknown-unknown -p uxduck-web
+      - run: cargo check --locked -p uxduck --no-default-features
+      - run: cargo test --locked -p uxduck --no-default-features --test cli --test smoke

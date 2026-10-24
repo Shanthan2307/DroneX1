@@ -1,0 +1,9 @@
+# The whole app is cross-origin isolated (S20, ADR-0011 M5): the simulated
+# vehicle's threads need SharedArrayBuffer.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# Host-only HSTS rollout; Worker responses are covered in worker/releases.ts.
+https://app.uxduck.com/*
+  Strict-Transport-Security: max-age=300

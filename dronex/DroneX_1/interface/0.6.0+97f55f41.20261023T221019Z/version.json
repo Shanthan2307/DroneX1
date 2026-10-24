@@ -1,0 +1,11 @@
+{
+  "version": "0.6.0",
+  "id": "0.6.0+97f55f41.20261023T221019Z",
+  "commit": "97f55f41acd1841a0dbee82f2fd22c58fa8c360a",
+  "dirty": false,
+  "mode": "production",
+  "builtAt": "2026-10-23T22:10:19Z",
+  "protocols": [
+    1
+  ]
+}

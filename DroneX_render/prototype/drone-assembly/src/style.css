@@ -1,0 +1,980 @@
+:root {
+  --bg: #0b0d12;
+  --surface: rgba(28, 30, 38, 0.72);
+  --surface-2: rgba(42, 45, 56, 0.85);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --text: #f6f7fb;
+  --text-2: #a9adb8;
+  --holo: #5cc8ff;
+  --select: #ffb020;
+  --go: #2ee6b6;
+  --nogo: #ff6a3d;
+  --font: "Inter", "SF Pro Text", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: radial-gradient(120% 90% at 50% 110%, #1a2030 0%, #0d1018 45%, #07080c 100%);
+  touch-action: none;
+}
+
+/* The day sky (main.js toggles body.bright-sky): a faint dark scrim behind the HUD line and the legend. */
+.hud,
+.brand p.keys {
+  transition: background 600ms ease, box-shadow 600ms ease;
+  border-radius: 8px;
+}
+body.bright-sky .hud,
+body.bright-sky .brand {
+  background: rgba(6, 8, 12, 0.72);
+  box-shadow: 0 0 0 8px rgba(6, 8, 12, 0.72);
+  border-radius: 999px;
+}
+body.bright-sky .brand p.keys {
+  background: none;
+  box-shadow: none;
+}
+
+
+.brand {
+  position: fixed;
+  top: 22px;
+  left: 28px; /* the DroneX logo, top-left */
+  pointer-events: none;
+  user-select: none;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 0;
+}
+
+/* The DroneX logo (assets/brand/dronex-logo-light.png, transparent, about 3.6:1). */
+.brand-logo {
+  display: block;
+  height: 34px;
+  width: auto;
+}
+
+.brand p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+/* Shortcut legend under the title: 2 rows of key + action. */
+.brand p.keys {
+  display: grid;
+  grid-template-columns: repeat(5, max-content); /* 10 keys: 2 rows of 5 */
+  gap: 7px 18px;
+  margin-top: 10px;
+}
+
+.brand p.keys span {
+  white-space: nowrap;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+/* Detail card: one selected part. Same surface as the bar; slides in at the left, bottom sheet on phones. */
+.detail {
+  position: fixed;
+  left: 32px;
+  top: 50%;
+  width: 312px;
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 16px 14px;
+  border: 1px solid rgba(255, 176, 32, 0.32);
+  border-radius: 14px;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--text);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-18px, -50%);
+  transition:
+    opacity 200ms ease,
+    transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s linear 280ms;
+}
+
+.detail.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(0, -50%);
+  transition:
+    opacity 200ms ease,
+    transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    visibility 0s;
+}
+
+.detail .eyebrow {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.detail h2 {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.005em;
+}
+
+.detail .sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.detail dl {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
+.detail dl > div {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.detail dt {
+  color: var(--text-2);
+}
+
+.detail dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail .tag {
+  display: inline-block;
+  margin-left: 2px;
+  padding: 0 5px;
+  border: 1px solid var(--hairline);
+  border-radius: 5px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--text-2);
+  white-space: nowrap;
+  vertical-align: 1px;
+}
+
+.detail .bad {
+  color: var(--nogo);
+}
+
+.detail .nw {
+  white-space: nowrap;
+}
+
+.detail .stage {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hairline);
+  font-size: 12.5px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail .stage p {
+  margin: 0;
+}
+
+.detail .warn {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--nogo);
+  font-size: 12px;
+}
+
+.detail .note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.detail .src {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.detail .src a {
+  color: var(--holo);
+  text-decoration: none;
+}
+
+.detail .src a:hover,
+.detail .src a:focus-visible {
+  text-decoration: underline;
+}
+
+/* Sourced-number drawer: every number on the card is a quiet button; its evidence opens on a line below. */
+.detail .num {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.28);
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
+  line-height: inherit;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail .num:hover,
+.detail .num:focus-visible,
+.detail .num[aria-expanded="true"] {
+  border-bottom-color: var(--select);
+  outline: none;
+}
+
+.detail .drawer {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  margin: 2px 0 4px;
+  padding: 6px 8px;
+  border-left: 2px solid rgba(255, 176, 32, 0.5);
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.detail .drawer-q {
+  color: var(--text);
+  font-style: italic;
+}
+
+.detail .drawer-f {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.detail .drawer a {
+  color: var(--holo);
+  text-decoration: none;
+  justify-self: start;
+}
+
+.detail .drawer a:hover {
+  text-decoration: underline;
+}
+
+/* Options: the card's one control; expands the slot's alternatives in place. */
+.detail .opts {
+  margin-top: 12px;
+}
+
+.detail .opt-toggle {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(92, 200, 255, 0.12);
+  border: 1px solid rgba(92, 200, 255, 0.32);
+  border-radius: 9px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 160ms, transform 160ms, opacity 160ms;
+}
+
+.detail .opt-toggle:hover {
+  background: rgba(92, 200, 255, 0.22);
+}
+
+.detail .opt-toggle:active {
+  transform: scale(0.97);
+}
+
+.detail .opts.open .opt-toggle {
+  background: rgba(255, 176, 32, 0.16);
+  border-color: rgba(255, 176, 32, 0.45);
+}
+
+.detail .opt-toggle:disabled,
+:is(.detail, .vehicles) .opt:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.detail .opt-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 4px 0 0;
+  max-height: 232px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid var(--hairline);
+}
+
+:is(.detail, .vehicles) .opt {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms;
+}
+
+:is(.detail, .vehicles) .opt:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:is(.detail, .vehicles) .opt:focus-visible {
+  outline: 2px solid var(--holo);
+  outline-offset: -2px;
+}
+
+:is(.detail, .vehicles) .opt[aria-current="true"] {
+  cursor: default;
+  background: rgba(255, 176, 32, 0.08);
+}
+
+:is(.detail, .vehicles) .opt-name {
+  font-size: 12.5px;
+  font-weight: 550;
+}
+
+:is(.detail, .vehicles) .opt[aria-current="true"] .opt-name {
+  color: var(--select);
+}
+
+.detail .opt-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--hairline);
+}
+
+.detail .opt-why {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+
+.detail .opt-incompatible .opt-why {
+  color: var(--nogo);
+}
+
+:is(.detail, .vehicles) .opt-meta {
+  font-size: 11.5px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Vehicles: the bar's preset list, opened in place above the bar (same rows as the card's Options). */
+.vehicles {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: 340px;
+  max-height: min(52vh, 380px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.vehicles ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vehicles .opt-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The mission row (main.js vehiclesHtml): the missions for the current build. */
+.vehicles li.dest-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+.vehicles .dest-btns {
+  display: flex;
+  gap: 4px;
+}
+.vehicles .dest {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.vehicles .dest:hover,
+.vehicles .dest:focus-visible {
+  color: var(--text);
+  border-color: var(--holo);
+  outline: none;
+}
+.vehicles .dest[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--holo);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* Only the DroneX logo top-left (the keys still work); the readiness panel only for the flight
+   result unless ?panel=1 (main.js body.rdy-off). */
+.brand p.keys,
+.brand .sky-toggles {
+  display: none;
+}
+body.rdy-off .rdy {
+  display: none !important;
+}
+
+/* Landing page: a big title and one button over the planet; the rest of the UI waits (body.landing, until the
+   dive passes 0.98). */
+.brand,
+.hud,
+.bar {
+  transition: opacity 600ms ease;
+}
+
+body.landing .brand,
+body.landing .hud,
+body.landing .bar,
+body.landing .detail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.landing .bar {
+  visibility: hidden;
+  transition:
+    opacity 600ms ease,
+    visibility 0s linear 600ms;
+}
+
+/* The atmosphere's glow during the landing dive (opacity from ui/landing.js); over the canvas, under the UI. */
+.landing-glow {
+  position: fixed;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(96, 140, 210, 0.42) 0%, rgba(60, 96, 160, 0.22) 45%, rgba(30, 50, 90, 0.1) 100%);
+}
+
+.landing-page {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: 16vh 16px 0;
+  text-align: center;
+  pointer-events: none; /* its opacity follows the scroll progress (ui/landing.js) */
+}
+
+.landing-page h1 {
+  margin: 0;
+  font-size: clamp(44px, 7.5vw, 104px);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.landing-go {
+  margin-top: 32px;
+  padding: 14px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 160ms, transform 160ms;
+}
+
+.landing-go:hover,
+.landing-go:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  outline: none;
+}
+
+.landing-go:active {
+  transform: scale(0.97);
+}
+
+/* Bottom bar */
+.bar {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: var(--surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bar > button {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(92, 200, 255, 0.16);
+  border: 1px solid rgba(92, 200, 255, 0.35);
+  border-radius: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 160ms, transform 160ms, opacity 160ms;
+}
+
+.bar > button:hover {
+  background: rgba(92, 200, 255, 0.28);
+}
+
+.bar > button:active {
+  transform: scale(0.97);
+}
+
+.bar > button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.bar > button.quiet {
+  background: transparent;
+  border-color: var(--hairline);
+  color: var(--text-2);
+}
+
+.bar > button.quiet:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.bar > button[aria-expanded="true"] {
+  background: rgba(255, 176, 32, 0.16);
+  border-color: rgba(255, 176, 32, 0.45);
+  color: var(--text);
+}
+
+.bar > button.on {
+  background: rgba(255, 176, 32, 0.18);
+  border-color: rgba(255, 176, 32, 0.5);
+}
+
+/* HUD */
+.hud {
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); /* readable over the day side of the Earth in flight */
+  position: fixed;
+  right: 32px;
+  top: 32px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  text-align: right;
+  max-width: calc(100vw - 560px); /* wraps before the key legend under the title */
+  pointer-events: none;
+  user-select: none;
+}
+
+.hud strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hud .go {
+  color: var(--go);
+}
+
+.hud .nogo {
+  color: var(--nogo);
+}
+
+@media (max-width: 1100px) {
+  .hud {
+    top: 124px;
+    left: 32px;
+    right: 32px;
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (max-width: 760px) {
+  .brand {
+    top: 16px;
+    left: 16px;
+    right: auto;
+  }
+  .brand h1 {
+    font-size: 18px;
+  }
+  .brand-logo {
+    height: 24px;
+  }
+  .brand p,
+  .brand p.keys {
+    display: none;
+  }
+  .hud {
+    top: 44px;
+    left: 16px;
+    right: 16px;
+    font-size: 11px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .detail {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 84px;
+    width: auto;
+    max-height: 46vh;
+    transform: translateY(18px);
+  }
+  .detail.open {
+    transform: none;
+  }
+  .bar {
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+  }
+  .bar > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+  .vehicles {
+    width: auto;
+    right: 0;
+  }
+}
+
+/* Touch: number buttons and source links get a 24 px tall hit box; the negative margin keeps the rows' layout. */
+@media (pointer: coarse) {
+  .detail .num {
+    padding: 4px 0;
+    margin: -4px 0;
+  }
+  .detail .src a {
+    padding: 6px 0;
+    margin: -6px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail,
+  .detail.open,
+  .bar button {
+    transition: none;
+  }
+}
+
+/* Day/Night and Clear/Cloudy toggles under the key legend (main.js). */
+.sky-toggles {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+.sky-toggles button {
+  padding: 4px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: rgba(10, 12, 18, 0.55);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sky-toggles button:hover,
+.sky-toggles button:focus-visible {
+  color: var(--text);
+  outline: none;
+  border-color: var(--holo);
+}
+
+/* The screen's controls: one slim glass pill at the bottom right, like the landing page's button. Quiet text
+   buttons, one solid white pill for the main action (Build all, then Take off), last in the row. */
+body .bar { left: auto; right: 24px; bottom: 24px; transform: none; gap: 2px; padding: 5px; border-radius: 999px; }
+body .bar > button,
+body .bar > button.quiet { border-radius: 999px; padding: 8px 15px; background: transparent; border: 1px solid transparent; color: var(--text-2); font-weight: 500; }
+body .bar > button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+body .bar > #btn-build-all { order: 9; margin-left: 4px; background: #f6f7fb; color: #07080c; font-weight: 600; }
+body .bar > #btn-build-all:hover:not(:disabled) { background: #fff; color: #07080c; }
+body .bar .vehicles { left: auto; right: 0; bottom: calc(100% + 10px); }
+body .bar > button:focus { outline: none; }
+body .bar > button:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.55); outline-offset: 2px; }
+/* Nothing on the pad yet (main.js body.pad-empty): Explode and Reset would do nothing, so they stay out of sight. */
+body.pad-empty .bar #btn-explode,
+body.pad-empty .bar #btn-reset { display: none; }
+/* Fly in simulation: shows once the drone is complete (main.js syncUi toggles body.pad-complete). */
+body .bar > #btn-fly { display: none; order: 8; }
+body.pad-complete .bar > #btn-fly { display: inline-block; }
+body .bar > #btn-fly:not(:disabled) { color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
+
+/* ---------- The Hangar (ui/hangar.js + hangarViews.js): the drone library, About, Test and New drone, in the
+   bar's panel. Same glass as the card; amber marks the current drone, --go / --nogo the verdict. ---------- */
+body .bar .vehicles {
+  width: 410px;
+  max-height: min(calc(100vh - 160px), 760px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: rgba(20, 22, 29, 0.84);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  color: var(--text);
+}
+body .bar .vehicles[hidden] { display: none; }
+.vehicles button { font: inherit; }
+.hg-head { display: flex; align-items: center; gap: 6px; padding: 12px 12px 10px 16px; border-bottom: 1px solid var(--hairline); }
+.hg-h2 { flex: 1; margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.005em; }
+.hg-icon { flex: none; width: 30px; height: 30px; border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: var(--text-2); font-size: 18px !important; line-height: 1; cursor: pointer; }
+.hg-icon:hover, .hg-icon:focus-visible { background: rgba(255, 255, 255, 0.12); color: var(--text); outline: none; }
+.hg-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px 14px; }
+.hg-body p { margin: 0; }
+.hg-dim { color: var(--text-2); }
+.hg-small { font-size: 12px; line-height: 1.45; }
+.hg-est { padding: 0 5px; border: 1px solid var(--hairline); border-radius: 5px; font-size: 10.5px; color: var(--text-2); vertical-align: 1px; }
+.vehicles .nw { white-space: nowrap; }
+.vehicles .bad { color: var(--nogo); }
+
+.hg-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.hg-body > .hg-actions:first-child { margin-top: 0; }
+.hg-primary { padding: 7px 14px; border: 0; border-radius: 999px; background: #f6f7fb; color: #07080c; font-weight: 600; font-size: 12.5px !important; cursor: pointer; }
+.hg-primary:hover { background: #fff; }
+.hg-tool { padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: transparent; color: var(--text-2); font-size: 11.5px !important; cursor: pointer; }
+.hg-tool:hover, .hg-tool:focus-visible { color: var(--text); border-color: rgba(255, 255, 255, 0.28); outline: none; }
+.hg-danger { color: var(--nogo); border-color: rgba(255, 106, 61, 0.45); }
+.hg-danger:hover { background: rgba(255, 106, 61, 0.14); color: var(--text); }
+.hg-primary:focus-visible, .hg-open:focus-visible { outline: 2px solid var(--holo); outline-offset: 2px; }
+
+.hg-section { display: flex; align-items: baseline; gap: 6px; margin: 16px 2px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
+.hg-section span { font-weight: 500; opacity: 0.7; }
+.hg-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hg-entry { position: relative; border: 1px solid var(--hairline); border-radius: 12px; background: rgba(255, 255, 255, 0.025); transition: border-color 140ms, background 140ms; }
+.hg-entry:hover { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.045); }
+.hg-entry.is-current { border-color: rgba(255, 176, 32, 0.5); background: rgba(255, 176, 32, 0.06); }
+.hg-open { display: grid; gap: 4px; width: 100%; padding: 10px 12px 8px; border: 0; border-radius: 12px; background: none; color: var(--text); text-align: left; cursor: pointer; }
+.hg-entry.is-current .hg-open { cursor: default; }
+.hg-row1 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hg-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 13.5px; }
+.hg-entry.is-current .hg-name { color: var(--select); }
+.hg-badge { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; color: #cfe9ff; background: rgba(92, 200, 255, 0.14); border: 1px solid rgba(92, 200, 255, 0.28); }
+.hg-b-wing { color: #ffe0b8; background: rgba(232, 162, 90, 0.14); border-color: rgba(232, 162, 90, 0.32); }
+.hg-b-vtol { color: #e4d8ff; background: rgba(183, 163, 217, 0.15); border-color: rgba(183, 163, 217, 0.34); }
+.hg-b-cinewhoop { color: #c8fff0; background: rgba(46, 230, 182, 0.12); border-color: rgba(46, 230, 182, 0.3); }
+.hg-b-broken { color: #ffd2c4; background: rgba(255, 106, 61, 0.14); border-color: rgba(255, 106, 61, 0.38); }
+.hg-nums { font-size: 12px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.hg-nums b { color: var(--text); font-weight: 600; }
+.hg-status { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 550; }
+.hg-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.hg-go { color: var(--go); }
+.hg-nogo { color: var(--nogo); }
+.hg-none, .hg-nj { color: var(--text-2); }
+.hg-tools { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 9px; }
+.hg-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text); }
+.hg-why { font-size: 12px; line-height: 1.4; color: var(--nogo); }
+.hg-entry.is-broken .hg-open { cursor: default; }
+.hg-empty { margin: 2px 2px 6px !important; font-size: 12px; line-height: 1.45; color: var(--text-2); }
+.hg-foot { margin-top: 14px !important; font-size: 11px; color: var(--text-2); opacity: 0.8; }
+
+/* Forms: New drone, Save as new drone, Rename. */
+.hg-form, .hg-rename { display: grid; gap: 6px; }
+.hg-rename { padding: 10px 12px; }
+.hg-label { margin-top: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-2); }
+.hg-rename .hg-label { margin-top: 0; }
+.vehicles input, .vehicles textarea, .vehicles select {
+  width: 100%; padding: 8px 10px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28); color: var(--text); font: inherit; font-size: 13.5px; resize: vertical;
+}
+.vehicles select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%); background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+.vehicles option, .vehicles optgroup { background: #1b1e26; color: var(--text); }
+.vehicles input:focus, .vehicles textarea:focus, .vehicles select:focus { outline: none; border-color: var(--holo); box-shadow: 0 0 0 3px rgba(92, 200, 255, 0.15); }
+.hg-form-btns { display: flex; gap: 6px; margin-top: 4px; }
+.hg-fill { list-style: none; margin: 2px 0 0; padding: 8px 10px; display: grid; gap: 3px; border-radius: 10px; background: rgba(255, 255, 255, 0.035); font-size: 12px; }
+.hg-fill .hg-dim { display: inline-block; min-width: 72px; }
+.hg-error { color: var(--nogo); font-size: 12px; }
+
+/* About */
+.hg-eyebrow { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
+.hg-eyebrow .hg-badge { text-transform: none; letter-spacing: 0.02em; }
+.hg-title { margin: 6px 0 2px; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.2; }
+.hg-title-sm { margin: 6px 0 2px; font-size: 14px; font-weight: 650; }
+.hg-h { margin: 16px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-2); }
+.hg-note { font-size: 12.5px; line-height: 1.55; color: #d9dce4; }
+.hg-eng { margin-top: 8px; }
+.hg-eng summary { cursor: pointer; font-size: 11.5px; color: #9aa3b2; }
+.hg-eng summary:hover { color: #d9dce4; }
+.hg-eng .hg-note { margin-top: 6px; color: #b8bfcc; }
+.hg-v-about .hg-status { margin-top: 6px; }
+.hg-checks { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 5px; font-size: 12px; line-height: 1.45; }
+.hg-checks li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; }
+.hg-ico { font-weight: 700; text-align: center; }
+.hg-checks .is-pass .hg-ico { color: var(--go); }
+.hg-checks .is-fail .hg-ico { color: var(--nogo); }
+.hg-checks .is-not-judged .hg-ico, .hg-checks .is-n\/a .hg-ico { color: var(--text-2); }
+.hg-checks .is-n\/a { opacity: 0.6; }
+.hg-parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hg-parts li { display: grid; grid-template-columns: 92px 1fr; gap: 1px 10px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); font-size: 12px; line-height: 1.4; }
+.hg-parts li:last-child { border-bottom: 0; padding-bottom: 0; }
+.hg-part-kind { grid-row: span 2; color: var(--text-2); text-transform: capitalize; }
+.hg-part-name { font-weight: 550; }
+.hg-key { margin-left: 4px; font-weight: 500; color: var(--select); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hg-part-does { color: var(--text-2); }
+.hg-sources { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+.hg-sources a { color: var(--holo); text-decoration: none; }
+.hg-sources a:hover { text-decoration: underline; }
+
+/* Test: the mission matrix. */
+.hg-matrix-wrap { margin-top: 10px; border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; }
+.hg-matrix { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.hg-matrix th, .hg-matrix td { padding: 7px 2px; text-align: center; }
+.hg-matrix td:last-child, .hg-matrix thead th:last-child { padding-right: 8px; }
+.hg-matrix thead th { font-size: 10px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-2); background: rgba(255, 255, 255, 0.03); }
+.hg-matrix thead th:first-child, .hg-matrix tbody th { text-align: left; padding-left: 10px; }
+.hg-matrix tbody th { font-weight: 550; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.hg-matrix tbody tr { border-top: 1px solid var(--hairline); cursor: pointer; transition: background 120ms; }
+.hg-matrix tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+.hg-matrix tbody tr:focus-visible { outline: 2px solid var(--holo); outline-offset: -2px; }
+.hg-matrix tbody tr.is-selected { background: rgba(255, 176, 32, 0.1); box-shadow: inset 3px 0 0 var(--select); }
+.hg-matrix tbody tr.is-selected th { color: var(--select); }
+.hg-matrix td { font-weight: 700; font-size: 13px; }
+.hg-matrix td.is-pass, .hg-legend .is-pass { color: var(--go); }
+.hg-matrix td.is-fail, .hg-legend .is-fail { color: var(--nogo); }
+.hg-matrix td.is-not-judged, .hg-legend .is-not-judged { color: var(--select); }
+.hg-matrix td.is-n\/a, .hg-legend .is-n\/a { color: var(--text-2); font-weight: 400; }
+.hg-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; vertical-align: 1px; }
+.hg-dot.is-pass { background: var(--go); }
+.hg-dot.is-fail { background: var(--nogo); }
+.hg-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px !important; font-size: 11px; }
+.hg-detail { margin-top: 12px; padding: 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--hairline); }
+.hg-detail .hg-eyebrow { gap: 10px; text-transform: none; letter-spacing: 0; }
+
+/* The current-drone chip, bottom left (above the bar on phones). */
+.dx-now {
+  position: fixed; left: 24px; bottom: 24px; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 640px);
+  padding: 5px 5px 5px 14px; border: 1px solid var(--hairline); border-radius: 999px; background: var(--surface);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 13px; transition: opacity 600ms ease;
+}
+.dx-now:empty { display: none; }
+.hg-chip-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.hg-chip-btn { flex: none; padding: 7px 13px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--text-2); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.hg-chip-btn:hover, .hg-chip-btn:focus-visible { background: rgba(255, 255, 255, 0.08); color: var(--text); outline: none; }
+.hg-chip-main { color: var(--text); background: rgba(255, 176, 32, 0.16); border-color: rgba(255, 176, 32, 0.45); }
+.hg-chip-main:hover { background: rgba(255, 176, 32, 0.26); }
+.hg-saved { flex: none; padding-right: 10px; font-size: 12px; color: var(--go); }
+body.landing .dx-now { opacity: 0; pointer-events: none; }
+
+/* Part cards: what the part does and why its numbers matter (ui/partRoles.js). */
+.detail .role { margin: 8px 0 0; padding: 8px 10px; border-radius: 9px; background: rgba(92, 200, 255, 0.07); font-size: 12px; line-height: 1.45; }
+.detail .role-why { color: var(--text-2); }
+
+@media (max-width: 1100px) {
+  .dx-now { max-width: calc(100vw - 600px); }
+}
+@media (max-width: 900px) {
+  .dx-now { left: 12px; right: 12px; bottom: 84px; max-width: none; }
+  body:has(.detail.open) .dx-now,
+  body.hangar-open .dx-now { display: none; }
+}
+@media (max-width: 760px) {
+  /* Phones: the bar spans the screen again (the pill rule above pins it right), so the Hangar can too. */
+  body .bar { left: 12px; right: 12px; bottom: 16px; }
+  body .bar > button, body .bar > button.quiet { padding: 8px 4px; white-space: nowrap; }
+  body .bar .vehicles { left: 0; right: 0; width: auto; max-height: calc(100vh - 200px); }
+  .dx-now { bottom: 76px; padding-left: 12px; }
+  .hg-matrix tbody th { max-width: 112px; }
+  .hg-parts li { grid-template-columns: 76px 1fr; }
+}
+.hg-open { padding-right: 70px; }
+.hg-about { position: absolute; top: 8px; right: 8px; padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: rgba(0, 0, 0, 0.18); color: var(--text-2); font-size: 11.5px !important; cursor: pointer; }
+.hg-about:hover, .hg-about:focus-visible { color: var(--text); border-color: rgba(255, 255, 255, 0.3); outline: none; }
+.hg-entry.is-broken .hg-open, .hg-entry.is-editing .hg-open { padding-right: 12px; }
