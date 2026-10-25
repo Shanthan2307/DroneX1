@@ -73,7 +73,9 @@ src/lib/copilot/            Cartesia: token, speech helpers, telemetry feed, cal
 src/lib/airspace/           SpacetimeDB: bindings, browser connection, types
 src/lib/analytics/          Elastic: the minimal REST client behind /api/analytics
 src/app/copilot/            the Copilot page: AirspaceView (SpacetimeDB) beside VoiceCopilot (Cartesia)
-src/app/api/{catalog,verdict,tracks,analytics,airspace,copilot}/   route handlers for the tracks and the agents
+src/app/api/{catalog,verdict,tracks,analytics,airspace,copilot,dispatch}/   route handlers for the tracks and the agents
+src/app/api/sim/vehicles/[id]/   a vehicle's readiness and telemetry; one copilot tool run directly (the flight agent)
+src/app/dispatch/, src/components/dispatch/   the Dispatch page: agents, addresses, Agentverse state, sentences to try
 src/components/tracks/      TracksPanel, the "Built with" sidebar
 prototype/drone-assembly/   the configurator (its own index.html + Vite config for standalone runs)
   docs/drone-integration.md the front-end contract: build, manifest, display scale, verdict, readiness

@@ -64,8 +64,11 @@ real work and is named on screen (the "Built with" sidebar, `src/lib/tracks.ts`)
   the catalog notes and the physics formula notes sit in `semantic_text`; an Agent Builder agent and a Workflow
   find the signal; the mission card shows fleet statistics from `/api/analytics`.
 - **DroneX Dispatch (Fetch.ai / ASI:One)**: `DroneX_agents` (dispatcher, fleet agents, flight agent) over
-  `/api/catalog`, `/api/verdict`, `/api/sim/designs`, `/api/sim/refly/<id>`, `/api/copilot/intent` and
-  `/api/airspace`, with Interactive Cards and the Payment Protocol as a bonus.
+  `/api/catalog`, `/api/verdict`, `/api/sim/designs`, `/api/sim/refly/<id>`, `/api/sim/vehicles/<id>` (the
+  copilot's tools run directly, plus pre-arm readiness), `/api/copilot/intent` (pilot commands relayed while a
+  flight is on) and `/api/airspace` (corridor before the go-to, mission status), with Interactive Cards and the
+  Payment Protocol as a bonus (testnet FET, checked on chain before the flight). The `/dispatch` page shows the
+  agents, their addresses and whether ASI:One can reach the dispatcher (`/api/dispatch`).
 
 Dependencies added for this phase, with the human's approval: `openai`, `@cartesia/cartesia-js`, `spacetimedb`
 (configurator); `spacetimedb`, `@elastic/elasticsearch`, `tsx`, `vitest` (live layer); `uagents`, `openai`,

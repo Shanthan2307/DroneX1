@@ -71,7 +71,17 @@ by uAgents) and the `uagents` package.
 **Risks.** Card responses may arrive as prose, not JSON. Discovery needs the agents online with their manifest
 published before judging, like `dev.sh`.
 
-**Decision:** chosen on 2026-10-25; being built in `DroneX_agents/`.
+**Decision:** chosen on 2026-10-25; built in `DroneX_agents/`.
+
+**Tested (2026-10-25).** With the mailbox off, a sentence goes through intent (ASI:One model), the carousel and
+review cards, approval, the stored design started in SITL, the wait for GPS and EKF, takeoff, a corridor granted
+by the SpacetimeDB reducer and the go-to; the Payment Protocol paid 0.5 testnet FET on Dorado and the flight agent
+checked the transaction on chain before flying. With the mailbox on, the dispatcher registers in the Almanac as a
+mailbox agent; Agentverse creates the mailbox only with the owner's key (`scripts/connect_agentverse.py`, or the
+inspector's Connect button), and `scripts/asi1_e2e.py` then tests ASI:One end to end. Found while testing: before
+the mailbox existed, the ASI:One agentic model answered *as if* it had reached the agent, so that script decides
+pass or fail from the dispatcher's own log, never from the model's words. Also found: the default `cosmpy` testnet
+config speaks gRPC, which this network blocks; the agents use Dorado's REST endpoint.
 
 Docs: uagents.fetch.ai/docs/examples/asi-1 · docs.agentverse.ai/documentation/advanced-usages/agent-driven-interactive-cards ·
 docs.agentverse.ai/documentation/advanced-usages/predefined-card-schemas · uagents.fetch.ai/docs/guides/agent-payment-protocol ·
