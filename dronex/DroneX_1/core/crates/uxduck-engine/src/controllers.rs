@@ -227,7 +227,17 @@ pub(crate) fn handle(
             }
             forget(engine, connection, &id)
         }
-        _ if !operator || !granted.contains(&Capability::Control) => {
+        // A guest of the public listener flies by keyboard only, and only a
+        // simulated vehicle no other guest flies (DEPLOY item 31, checked
+        // by the guest gate); never a controller plugged into the host.
+        ClientRequest::KeyboardStart(_)
+        | ClientRequest::KeyboardInput(_)
+        | ClientRequest::KeyboardStop(_)
+            if !operator && !engine.is_guest(connection) =>
+        {
+            denied("only an operator client may hold a controller")
+        }
+        _ if !granted.contains(&Capability::Control) => {
             denied("only an operator client may hold a controller")
         }
         ClientRequest::KeyboardStart(params) => keyboard_start(engine, connection, params),
@@ -236,6 +246,7 @@ pub(crate) fn handle(
             engine.stop_keyboard(connection);
             Ok(json!({}))
         }
+        _ if !operator => denied("only an operator client may hold a controller"),
         ClientRequest::ControllerClaim(params) if params.id.starts_with("keyboard:") => {
             denied("Start keyboard control from the vehicle's Cockpit tab")
         }

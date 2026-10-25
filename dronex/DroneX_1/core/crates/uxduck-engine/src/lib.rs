@@ -32,6 +32,7 @@ mod flight_time;
 mod flight_usage;
 mod forwarding;
 mod grounded;
+pub mod guests;
 mod history;
 mod idle_simulations;
 mod import;
@@ -408,6 +409,9 @@ pub struct Engine {
     telemetry_subscribers: BTreeSet<ConnectionId>,
     subscribers: BTreeMap<ConnectionId, BTreeSet<EntityType>>,
     sessions: Sessions,
+    /// Vehicles guests of the public listener fly, each with the guest's
+    /// client id (DEPLOY item 31): no other guest may control them.
+    guest_vehicles: HashMap<String, String>,
     /// Phones and tablets on this network (S97): the addresses and where
     /// UXDuck listens, as the host last said.
     network: uxduck_contracts::dto::network::NetworkStatus,
@@ -533,6 +537,7 @@ impl Engine {
             telemetry_subscribers: BTreeSet::new(),
             subscribers: BTreeMap::new(),
             sessions: Sessions::restored(loaded.sessions),
+            guest_vehicles: HashMap::new(),
             network: uxduck_contracts::dto::network::NetworkStatus::default(),
             removed_links: BTreeSet::new(),
         };
@@ -672,7 +677,11 @@ impl Engine {
         self.tray_watchers.remove(&id);
         self.app_update.watchers.remove(&id);
         self.messages.forget(id);
+        let guest = self.guest_client_of(id).map(str::to_owned);
         self.connections.remove(&id);
+        if let Some(guest) = guest {
+            self.guest_left(&guest);
+        }
         self.tracers.remove(&id);
         self.telemetry_subscribers.remove(&id);
         self.subscribers.remove(&id);

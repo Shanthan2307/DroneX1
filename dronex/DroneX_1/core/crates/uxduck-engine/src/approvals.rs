@@ -793,7 +793,7 @@ fn live_operators(engine: &Engine) -> Vec<ClientRecord> {
     seen.into_values().collect()
 }
 
-fn method_of(request: &ClientRequest) -> String {
+pub(crate) fn method_of(request: &ClientRequest) -> String {
     serde_json::to_value(request)
         .ok()
         .and_then(|v| v["method"].as_str().map(str::to_owned))

@@ -337,6 +337,36 @@ pub struct DaemonArgs {
     /// fail (S24). For tests only.
     #[arg(long, hide = true)]
     spin_for_tests: bool,
+    /// Serve the simulator for anyone at this origin, such as
+    /// `https://sim.example.com`: no pairing, every visitor a guest who may
+    /// watch and fly simulated vehicles, never an operator. Listens on
+    /// 127.0.0.1:--public-port, behind a proxy that keeps `Host` and
+    /// `Origin` as sent and sets `X-Forwarded-For`.
+    #[arg(
+        long,
+        value_name = "ORIGIN",
+        env = "UXDUCK_PUBLIC_ORIGIN",
+        requires = "public_port"
+    )]
+    public_origin: Option<String>,
+    /// The loopback port of the public listener (`--public-origin`).
+    #[arg(
+        long,
+        value_name = "PORT",
+        env = "UXDUCK_PUBLIC_PORT",
+        requires = "public_origin"
+    )]
+    public_port: Option<u16>,
+    /// With `--public-origin`: stop simulated vehicles older than this many
+    /// minutes.
+    #[arg(
+        long,
+        value_name = "MINUTES",
+        env = "UXDUCK_SIM_MAX_AGE",
+        requires = "public_origin",
+        value_parser = clap::value_parser!(u64).range(1..)
+    )]
+    sim_max_age: Option<u64>,
     #[command(subcommand)]
     action: Option<DaemonAction>,
 }
@@ -2836,6 +2866,16 @@ async fn run_daemon(
             tcp_ports: args.find_tcp_ports,
             gateway: !args.find_no_gateway,
         },
+        public: args
+            .public_origin
+            .zip(args.public_port)
+            .map(|(origin, port)| crate::daemon::Public {
+                origin,
+                port,
+                sim_max_age: args
+                    .sim_max_age
+                    .map(|minutes| std::time::Duration::from_secs(minutes * 60)),
+            }),
     };
     daemon::run(options)
         .await

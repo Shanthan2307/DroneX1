@@ -44,13 +44,17 @@ pub(crate) fn handle(
         .and_then(|c| c.admitted.as_ref())
         .ok_or_else(|| ApiError::new(ErrorKind::NotInitialized, "call initialize first"))?;
     let operator = admitted.is_operator();
+    // A visitor of the public listener (DEPLOY item 3): only what the 3D
+    // page needs, and never a question for the operators.
+    let guest = engine.is_guest(connection);
+    let request = engine.guest_gate(connection, request)?;
     // From away (S80): only commands and the lease, each once.
     if let Some(result) = engine.remote_gate(connection, &request) {
         return result;
     }
     let granted = engine.granted(connection);
     // Escalation instead of rejection (ADR-0005): held, answered later.
-    if !operator && engine.escalate(connection, &request, &granted) {
+    if !operator && !guest && engine.escalate(connection, &request, &granted) {
         return Ok(Value::Null);
     }
     let require = |capability: uxduck_core::domain::client::Capability| {
@@ -1060,12 +1064,7 @@ fn initialize(
     };
     let (record, core_granted) = match network {
         Some(client) => {
-            let Some(granted) = engine.admit_network(&client) else {
-                return Err(ApiError::new(
-                    ErrorKind::CapabilityDenied,
-                    "This device was forgotten on the computer running UXDuck. Reload to pair it again.",
-                ));
-            };
+            let granted = admit_network(engine, &client)?;
             (client, granted)
         }
         None => engine.admit_record(
@@ -1103,6 +1102,29 @@ fn initialize(
         client_id,
         granted,
         release_stage: uxduck_contracts::version::ReleaseStage::Flight,
+    })
+}
+
+/// What a page through a network listener is granted: a phone or tablet
+/// the record it paired with (S97), a guest of the public listener
+/// watching and flying without one (DEPLOY item 2).
+fn admit_network(
+    engine: &mut Engine,
+    client: &str,
+) -> Result<Vec<uxduck_core::domain::client::Capability>, ApiError> {
+    if crate::pairing::is_guest_client(client) {
+        return engine.admit_guest(client).ok_or_else(|| {
+            ApiError::new(
+                ErrorKind::CapabilityDenied,
+                "This visit has ended. Reload the page to fly again.",
+            )
+        });
+    }
+    engine.admit_network(client).ok_or_else(|| {
+        ApiError::new(
+            ErrorKind::CapabilityDenied,
+            "This device was forgotten on the computer running UXDuck. Reload to pair it again.",
+        )
     })
 }
 

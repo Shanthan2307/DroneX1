@@ -36,6 +36,19 @@ pub const DEV_ORIGIN: &str = "http://localhost:45101";
 pub const DEV_VIDEO_PORT: u16 = 45_110;
 pub const DEV_FIND_UDP_PORTS: [u16; 2] = [45_111, 45_112];
 
+/// The public listener (`--public-origin`, DEPLOY item 1): the simulator
+/// page for anyone, on loopback behind the host's proxy, with guests
+/// instead of pairing.
+#[derive(Clone, Debug)]
+pub struct Public {
+    /// What visitors' browsers show, such as `https://sim.example.com`.
+    pub origin: String,
+    /// The loopback port the proxy forwards to.
+    pub port: u16,
+    /// Simulated vehicles older than this are stopped (DEPLOY item 30).
+    pub sim_max_age: Option<std::time::Duration>,
+}
+
 /// Where controller input comes from.
 #[derive(Clone, Copy, Debug)]
 pub struct ControllerInput {
@@ -88,6 +101,8 @@ pub struct DaemonOptions {
     pub video_port: Option<u16>,
     /// Where looking for vehicles nearby goes (S44).
     pub find: crate::find::Places,
+    /// The public listener for guests, when asked for (DEPLOY item 1).
+    pub public: Option<Public>,
 }
 
 /// How long the daemon waits after the last window closes before it quits,
@@ -102,6 +117,8 @@ pub enum DaemonError {
     Bind(#[from] local::BindError),
     #[error("cannot listen on 127.0.0.1:{port}: {source}")]
     Port { port: u16, source: std::io::Error },
+    #[error("--public-origin must be http(s)://host[:port], not {0}")]
+    PublicOrigin(String),
     #[error("cannot use the data directory {path}: {source}")]
     DataDir {
         path: String,
@@ -212,9 +229,24 @@ pub async fn run(options: DaemonOptions) -> Result<(), DaemonError> {
             referrer: ui_url.clone(),
         },
     );
+    if let Some(public) = &options.public {
+        serve_public(
+            &engine,
+            public,
+            crate::network::Served {
+                interfaces: interfaces.clone(),
+                video: video.clone(),
+                files: vehicle_files.clone(),
+                referrer: String::new(),
+            },
+        )
+        .await?;
+    }
     let app = http::router(
         engine.clone(),
-        http::Allowlist::new(port, &extra_origins).with_hosted(&options.hosted_origins),
+        http::Allowlist::new(port, &extra_origins)
+            .with_hosted(&options.hosted_origins)
+            .refusing_public(options.public.as_ref().map(|p| p.origin.as_str())),
         interfaces,
         video,
         vehicle_files,
@@ -260,7 +292,11 @@ pub async fn run(options: DaemonOptions) -> Result<(), DaemonError> {
     }
 
     crate::app_update::start(engine.clone(), data_dir.clone(), port, options.update_check);
-    watch(&engine, options.headless);
+    watch(
+        &engine,
+        options.headless,
+        options.public.as_ref().and_then(|p| p.sim_max_age),
+    );
     let stop = run_until_stopped(&engine, &options, parent_closed).await;
     tracing::info!("shutting down");
     // A final checkpoint, so the next start replays nothing (ADR-0007).
@@ -274,6 +310,42 @@ pub async fn run(options: DaemonOptions) -> Result<(), DaemonError> {
         Stop::Quit => Ok(()),
         Stop::Restart => Err(DaemonError::Restart(restart_process())),
     }
+}
+
+/// Binds `127.0.0.1:<public port>` and serves the public router there for
+/// as long as the daemon runs (DEPLOY item 1). Every connection is a
+/// `NetworkBrowser`, which is never an operator.
+async fn serve_public(
+    engine: &EngineHandle,
+    public: &Public,
+    served: crate::network::Served,
+) -> Result<(), DaemonError> {
+    let (stop, stopped) = tokio::sync::watch::channel(false);
+    let network = http::Network::public(&public.origin, stopped)
+        .ok_or_else(|| DaemonError::PublicOrigin(public.origin.clone()))?;
+    let tcp = tokio::net::TcpListener::bind(("127.0.0.1", public.port))
+        .await
+        .map_err(|source| DaemonError::Port {
+            port: public.port,
+            source,
+        })?;
+    let app = http::public_router(
+        engine.clone(),
+        network,
+        served.interfaces,
+        served.video,
+        served.files,
+    );
+    tracing::info!(origin = %public.origin, port = public.port, "serving guests of the public simulator");
+    tokio::spawn(async move {
+        let service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+        if let Err(error) = axum::serve(tcp, service).await {
+            tracing::error!(%error, code = "listener-stopped", "the public listener stopped");
+        }
+        // Its sockets close with it.
+        let _ = stop.send(true);
+    });
+    Ok(())
 }
 
 fn initialize_private_state(data_dir: &Path) -> Result<(), DaemonError> {
@@ -674,8 +746,8 @@ fn open_interfaces(
 
 /// The engine's chores: approvals that expire, storage, and on a computer
 /// with a person at it, Open at login.
-fn watch(engine: &EngineHandle, headless: bool) {
-    tokio::spawn(expire_approvals(engine.clone()));
+fn watch(engine: &EngineHandle, headless: bool, sim_max_age: Option<std::time::Duration>) {
+    tokio::spawn(expire_approvals(engine.clone(), sim_max_age));
     tokio::spawn(check_storage(engine.clone()));
     if !headless {
         tokio::spawn(check_login_item(engine.clone()));
@@ -713,9 +785,11 @@ async fn check_storage(engine: EngineHandle) {
     }
 }
 
-/// Applies the safe default to approvals nobody answered in time.
-async fn expire_approvals(engine: EngineHandle) {
+/// Applies the safe default to approvals nobody answered in time. In
+/// public mode also ends old simulations (`--sim-max-age`, DEPLOY item 30).
+async fn expire_approvals(engine: EngineHandle, sim_max_age: Option<std::time::Duration>) {
     use uxduck_engine::runtime::Clock;
+    let sim_max_age_us = sim_max_age.map(|age| u64::try_from(age.as_micros()).unwrap_or(u64::MAX));
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
     loop {
         tick.tick().await;
@@ -728,6 +802,13 @@ async fn expire_approvals(engine: EngineHandle) {
                 e.expire_display_pulls(now);
                 e.expire_video_watches(now);
                 e.expire_pairings();
+                // Guests of the public listener, with their pages (DEPLOY item 2).
+                e.expire_guests();
+                if let Some(max_age_us) = sim_max_age_us {
+                    for link in e.stop_old_simulations(max_age_us) {
+                        tracing::info!(%link, "stopped a simulation older than --sim-max-age");
+                    }
+                }
                 // Controllers no reloaded window took back.
                 e.expire_detached_claims(now);
                 e.supervise(now);
