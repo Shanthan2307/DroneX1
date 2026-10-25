@@ -1,0 +1,15 @@
+[package]
+name = "dronex-airspace"
+version = "0.1.0"
+edition = "2021"
+description = "DroneX shared airspace: every operator's vehicles, positions, corridors and incidents in one live world, with the rules enforced next to the data (SpacetimeDB module)."
+
+# Its own workspace: this module is not part of the simulation engine's Cargo workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+spacetimedb = "2.13"
+log = "0.4"
