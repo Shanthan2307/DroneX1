@@ -74,6 +74,8 @@ src/lib/airspace/           SpacetimeDB: bindings, browser connection, types
 src/lib/analytics/          Elastic: the minimal REST client behind /api/analytics
 src/app/copilot/            the Copilot page: AirspaceView (SpacetimeDB) beside VoiceCopilot (Cartesia)
 src/app/api/{catalog,verdict,tracks,analytics,airspace,copilot,dispatch}/   route handlers for the tracks and the agents
+src/app/api/assistant/, src/lib/ai/assistant.ts   the build assistant: questions about the drone on the pad, answered by tools over the dataset and the physics
+src/components/assistant/   "Ask DroneX" on the configurator: Cartesia voice in and out, swap buttons, talks to main.js through window events
 src/app/api/sim/vehicles/[id]/   a vehicle's readiness and telemetry; one copilot tool run directly (the flight agent)
 src/app/dispatch/, src/components/dispatch/   the Dispatch page: agents, addresses, Agentverse state, sentences to try
 src/components/tracks/      TracksPanel, the "Built with" sidebar

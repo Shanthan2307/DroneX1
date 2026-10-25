@@ -22,7 +22,11 @@ This file is the product-level summary; if the two disagree, fix whichever is wr
    endurance and the mission checks; Take off flies the drone (a hover loop for a multirotor, a circuit for a
    fixed wing) and ends with a result.
 5. **Create.** Save a modified build as a new drone.
-6. **Fly in simulation.** On a complete drone, **Fly in simulation** sends it to the simulation engine and the
+6. **Ask.** "Ask DroneX" (top right) answers questions about the drone on the pad, by voice (Cartesia: hold to
+   talk, answers spoken) or typed: what a part does, what a mission requires, why a check fails, what to swap.
+   Every number in an answer comes from the dataset or the verdict; a swap is judged by the physics before it is
+   offered, and pressing it swaps the part like the card's Options do.
+7. **Fly in simulation.** On a complete drone, **Fly in simulation** sends it to the simulation engine and the
    browser follows: the exact parts on the pad become a glTF miniature in true metres, the design's battery,
    hover throttle and airspeeds become ArduPilot parameters (`simProfile.js`, every number from the datasets or
    the verdict, labelled est.), and the simulation UI opens on the new vehicle. No file, no import step. The

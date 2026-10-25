@@ -54,6 +54,11 @@ to the simulation page with that drone on the map as a simulated vehicle.
 The flying half grows a voice, a shared airspace, memory and a front door, each on a sponsor technology that does
 real work and is named on screen (the "Built with" sidebar, `src/lib/tracks.ts`):
 
+- **Build assistant (Cartesia)** on the configurator ("Ask DroneX"): voice (Ink in, Sonic out) or typed questions
+  about the drone on the pad. It explains what each part does and its sourced numbers, a mission's requirements,
+  why the drone passes or fails, and which part to pick instead; tools over the dataset and `dronePhysics.js`
+  (`src/lib/ai/assistant.ts`) give every number, and swaps are judged before they are offered as buttons. The front
+  end and the panel talk through window events (`dronex:state`, `dronex:swap`, `dronex:mission`).
 - **Voice copilot (Cartesia)** at `/copilot`: Ink streaming speech-to-text in, Sonic callouts and replies out,
   barge-in; commands go through one tool layer (`src/lib/sim/tools.ts`) chosen by function calling
   (`src/lib/ai/intent.ts`); callouts are deterministic templates over live telemetry (`/api/copilot/events`).
