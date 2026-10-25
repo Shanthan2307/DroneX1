@@ -213,20 +213,6 @@ node DroneX_render/prototype/drone-assembly/scripts/check-drone-physics.mjs   # 
 DroneX_agents/.venv/bin/python -m pytest DroneX_agents                 # 35 tests: cards, missions, flight sequence, payments
 ```
 
-## What it does not do yet
-
-- **The simulator flies ArduPilot's standard frames.** Your design sets the battery model, hover throttle and
-  airspeeds; mass distribution and motor thrust curves are not yet fed into the simulator's physics.
-- **No structural or aerodynamic analysis.** DroneX tells you whether the propulsion and energy budget closes,
-  not whether a printed arm will snap.
-- **The parts shelf is small**: 7 airframes, 10 motors, 9 propellers, 8 batteries, 5 payloads, all sourced.
-  Some missions have no passing build in it (the 15 km medical delivery, for one), and the assistant says so.
-- **Ask DroneX does one change per request** and the copilot one command per sentence: "take off, then go to
-  Coit Tower" takes off; say the go-to once it is airborne.
-- **Building avoidance is for multicopters**; planes and VTOLs fly straight in guided flight.
-- **Wind and weather are the simulator's defaults**, and flights start in San Francisco.
-- **ASI:One discovery of the dispatcher** is still being verified: the agent is listed on Agentverse with its
-  mailbox and answers through it, but ASI:One's API had not routed to it yet at the last test.
 
 ## Documentation
 
