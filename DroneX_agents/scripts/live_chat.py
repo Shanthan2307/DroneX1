@@ -5,6 +5,9 @@
 Each argument is sent as one ChatMessage once the previous replies have settled; every reply (text and the
 card metadata) is printed. Needs the three agents running with DRONEX_MAILBOX=0 (local endpoints) or with the
 mailbox on (the dispatcher still has a local endpoint rule here).
+
+With --via-agentverse the client ignores the local rule and resolves the dispatcher through the Almanac, so the
+messages go through its Agentverse mailbox, the path ASI:One uses: a test of the mailbox without ASI:One.
 """
 
 from __future__ import annotations
@@ -25,10 +28,11 @@ from dronex_agents.addresses import LocalFirstResolver, dispatcher_address, loca
 from dronex_agents.config import load_settings  # noqa: E402
 
 s = load_settings()
-rules = local_rules(s)
+via_agentverse = "--via-agentverse" in sys.argv
+rules = {k: v for k, v in local_rules(s).items() if not (via_agentverse and k == dispatcher_address(s))}
 me = Agent(name="live-chat-client", seed="dronex live chat client seed", port=8009, endpoint="http://127.0.0.1:8009/submit", resolve=LocalFirstResolver(rules), enable_agent_inspector=False, publish_agent_details=False, report_events=False)
 chat = Protocol(spec=chat_protocol_spec)
-lines = [a for a in sys.argv[1:]] or ["Fly a 10 km ridge run to Twin Peaks within 15 minutes"]
+lines = [a for a in sys.argv[1:] if a != "--via-agentverse"] or ["Fly a 10 km ridge run to Twin Peaks within 15 minutes"]
 state = {"i": 0, "last": 0.0}
 
 
