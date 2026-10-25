@@ -25,6 +25,19 @@ def flight_address(s: Settings) -> str:
     return address_of(s.flight_seed)
 
 
+def wallet_address_of(seed: str) -> str:
+    """The ledger wallet uagents derives for an agent with this seed (Agent._initialize_wallet_and_identity)."""
+    from cosmpy.aerial.wallet import LocalWallet, PrivateKey
+    from uagents.config import LEDGER_PREFIX
+    from uagents_core.identity import derive_key_from_seed
+
+    return str(LocalWallet(PrivateKey(derive_key_from_seed(seed, LEDGER_PREFIX, 0)), prefix=LEDGER_PREFIX).address())
+
+
+def flight_wallet_address(s: Settings) -> str:
+    return wallet_address_of(s.flight_seed)
+
+
 def fleet_addresses(s: Settings) -> dict[str, str]:
     """preset id → the fleet agent's address."""
     return {pid: address_of(s.fleet_seed_for(pid)) for pid in s.preset_ids}

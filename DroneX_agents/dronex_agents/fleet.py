@@ -16,7 +16,7 @@ import time
 from uagents import Agent, Bureau, Context, Protocol
 
 from .addresses import LocalFirstResolver, local_rules
-from .config import Settings, describe_missing, load_settings
+from .config import Settings, describe_missing, exit_if_unsafe, load_settings
 from .mission import MissionRequest, judge_candidate
 from .protocol import CapabilityQuery, CapabilityReply
 from .render_api import Catalog, Preset, RenderApi, RenderApiError
@@ -88,7 +88,8 @@ def build_fleet(s: Settings, state: FleetState) -> Bureau:
 
 def main() -> None:
     s = load_settings()
-    api = RenderApi(s.render_url)
+    exit_if_unsafe(s)
+    api = RenderApi(s.render_url, token=s.agent_token)
     state = FleetState(api)
     print("DroneX fleet: one agent per hangar drone")
     for line in describe_missing(s):

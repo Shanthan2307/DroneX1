@@ -20,10 +20,10 @@ from uagents_core.contrib.protocols.payment import CommitPayment
 
 from . import airspace
 from .addresses import LocalFirstResolver, dispatcher_address, local_rules
-from .config import Settings, describe_missing, load_settings
-from .payment import request_payment, seller_protocol
+from .config import Settings, describe_missing, exit_if_unsafe, load_settings
+from .payment import fet_to_atestfet, request_payment, seller_protocol
 from .protocol import FlightOrder, FlightProgress, FlightResult, PaymentQuote
-from .render_api import RenderApi, RenderApiError, StoredDesign, VehicleState
+from .render_api import RenderApi, RenderApiError, SimulatorFull, StoredDesign, VehicleState
 
 FLIGHT_PROTOCOL_NAME = "dronex-flight"
 FLIGHT_AGENT_NAME = "dronex-flight"
@@ -121,16 +121,19 @@ class FlightRunner:
             return FlightResult(
                 order_id=order.order_id,
                 ok=False,
-                summary=f"The hangar drone {order.preset_id} has not been packed for the simulator yet. Open {self.s.render_url}/?build={order.preset_id}, press Build all, then Fly in simulation once; after that I can fly it on request.",
+                summary=f"The hangar drone {order.preset_id} has not been packed for the simulator yet. Open {self.s.public_url}/?build={order.preset_id}, press Build all, then Fly in simulation once; after that I can fly it on request.",
             )
         await progress(f"packing {design.name} (design {design.id}) into the simulator…")
         try:
             flown = await self.api.refly(design.id)
+        except SimulatorFull:
+            # One answer, no retry loop: the user asks again later.
+            return FlightResult(order_id=order.order_id, ok=False, design_id=design.id, summary="the simulator is full right now (other people are flying). Please try again in a few minutes")
         except RenderApiError as e:
             return FlightResult(order_id=order.order_id, ok=False, design_id=design.id, summary=f"the simulator did not start the vehicle: {e}")
         vid = flown.vehicle_id
         map_url = f"{self.s.sim_ui_url}/?vehicle={vid}"
-        copilot_url = f"{self.s.render_url}/copilot"
+        copilot_url = f"{self.s.public_url}/copilot"
         await progress(f"{flown.name or design.name} is online in the simulator (vehicle {vid[:8]}…). Map: {map_url}")
         await self.api.record_mission(vehicle_id=vid, mission_id=order.mission_id, agent=FLIGHT_AGENT_NAME, status="accepted")
 
@@ -200,59 +203,112 @@ def build_flight_agent(s: Settings, api: RenderApi) -> Agent:
     )
     runner = FlightRunner(s, api)
     proto = Protocol(name=FLIGHT_PROTOCOL_NAME, version="0.1.0")
-    pending: dict[str, FlightOrder] = {}
+    gate = OrderGate(dispatcher_address(s), max_running=max(s.dispatch_max_active, 1))
 
     async def fly(ctx: Context, order: FlightOrder) -> None:
         async def progress(text: str) -> None:
             ctx.logger.info(f"[{order.order_id}] {text}")
-            await ctx.send(order.reply_to, FlightProgress(order_id=order.order_id, text=text))
+            await ctx.send(gate.dispatcher, FlightProgress(order_id=order.order_id, text=text))
 
-        result = await runner.run(ctx, order, progress)
-        await ctx.send(order.reply_to, result)
+        gate.running.add(order.order_id)
+        try:
+            result = await runner.run(ctx, order, progress)
+        except Exception as e:  # never leave the dispatcher waiting for a result that will not come
+            ctx.logger.exception(f"[{order.order_id}] flight failed")
+            result = FlightResult(order_id=order.order_id, ok=False, summary=f"the flight agent hit an error ({e.__class__.__name__})")
+        finally:
+            gate.running.discard(order.order_id)
+        await ctx.send(gate.dispatcher, result)
 
     @proto.on_message(FlightOrder)
     async def on_order(ctx: Context, sender: str, order: FlightOrder) -> None:
-        ctx.logger.info(f"order {order.order_id}: {order.preset_id} on {order.mission_id} from {sender[:12]}…")
+        refused = gate.refuse(sender, order)
+        if refused is not None:
+            ctx.logger.warning(f"order {order.order_id} from {sender[:12]}… refused: {refused}")
+            if sender == gate.dispatcher:
+                await ctx.send(sender, FlightResult(order_id=order.order_id, ok=False, summary=refused))
+            return  # anyone else gets nothing back: no progress, no result, no simulator time
+        ctx.logger.info(f"order {order.order_id}: {order.preset_id} on {order.mission_id} from the dispatcher")
         if s.payments:
-            pending[order.order_id] = order
+            gate.hold(order)
             try:
                 await request_payment(ctx, sender, recipient=str(agent.wallet.address()), reference=order.order_id, price_fet=s.flight_price_fet, description=f"one simulated flight of {order.preset_id} on {order.mission_id}")
             except Exception as e:  # never strand an order on a payment problem
                 ctx.logger.exception("payment request failed")
-                pending.pop(order.order_id, None)
-                await ctx.send(order.reply_to, FlightProgress(order_id=order.order_id, text=f"could not quote a price ({e}); flying without payment"))
+                gate.pending.pop(order.order_id, None)
+                await ctx.send(gate.dispatcher, FlightProgress(order_id=order.order_id, text=f"could not quote a price ({e}); flying without payment"))
                 await fly(ctx, order)
                 return
-            await ctx.send(order.reply_to, FlightProgress(order_id=order.order_id, text=f"quoted {s.flight_price_fet} FET (testnet) for this flight; waiting for the dispatcher to commit"))
+            await ctx.send(gate.dispatcher, FlightProgress(order_id=order.order_id, text=f"quoted {s.flight_price_fet} FET (testnet) for this flight; waiting for the dispatcher to commit"))
             return
         await fly(ctx, order)
 
     @proto.on_message(PaymentQuote)
     async def on_quote(ctx: Context, sender: str, q: PaymentQuote) -> None:
+        if sender != gate.dispatcher:
+            return
         await ctx.send(sender, FlightProgress(order_id=q.order_id, text=f"a simulated flight costs {s.flight_price_fet} FET on testnet" if s.payments else "payments are off; flights are free"))
 
     async def on_committed(ctx: Context, buyer: str, commit: CommitPayment) -> None:
-        order = pending.pop(commit.reference or "", None)
+        if buyer != gate.dispatcher:
+            return
+        order = gate.pending.pop(commit.reference or "", None)
         if order is None:
             ctx.logger.warning(f"commit for unknown order {commit.reference}")
             return
-        await ctx.send(order.reply_to, FlightProgress(order_id=order.order_id, text=f"payment received ({'ledger tx ' + commit.transaction_id if commit.transaction_id else 'by reference, no FET moved'}); flying"))
+        await ctx.send(gate.dispatcher, FlightProgress(order_id=order.order_id, text=f"payment received ({'ledger tx ' + commit.transaction_id if commit.transaction_id else 'by reference, no FET moved'}); flying"))
         await fly(ctx, order)
 
     async def on_unpaid(ctx: Context, commit: CommitPayment, why: str) -> None:
-        order = pending.pop(commit.reference or "", None)
+        order = gate.pending.pop(commit.reference or "", None)
         if order is not None:
-            await ctx.send(order.reply_to, FlightResult(order_id=order.order_id, ok=False, summary=f"the payment did not check out on the testnet ({why}), so I did not fly"))
+            await ctx.send(gate.dispatcher, FlightResult(order_id=order.order_id, ok=False, summary=f"the payment did not check out ({why}), so I did not fly"))
 
     agent.include(proto, publish_manifest=s.flight_mailbox)
     if s.payments:
-        agent.include(seller_protocol(on_committed, recipient=str(agent.wallet.address()), verify_ledger=s.payments_ledger, on_unpaid=on_unpaid), publish_manifest=s.flight_mailbox)
+        agent.include(
+            seller_protocol(on_committed, recipient=str(agent.wallet.address()), verify_ledger=s.payments_ledger, on_unpaid=on_unpaid, buyer=gate.dispatcher, min_amount=fet_to_atestfet(s.flight_price_fet)),
+            publish_manifest=s.flight_mailbox,
+        )
     return agent
+
+
+class OrderGate:
+    """Who may order a flight (DEPLOY.md item 22). Only the dispatcher: it holds the per-user and global limits.
+    Progress and results always go back to the dispatcher, never to an address named inside the order, so a forged
+    `reply_to` cannot redirect them. `max_running` is a backstop on simultaneous flights in this agent."""
+
+    PENDING_TTL_S = 300.0  # an unpaid quote holds a slot this long at most (the quote's deadline is 120 s)
+
+    def __init__(self, dispatcher: str, max_running: int):
+        self.dispatcher = dispatcher
+        self.max_running = max_running
+        self.running: set[str] = set()
+        self.pending: dict[str, FlightOrder] = {}
+        self._pending_at: dict[str, float] = {}
+
+    def hold(self, order: FlightOrder) -> None:
+        self.pending[order.order_id] = order
+        self._pending_at[order.order_id] = time.monotonic()
+
+    def refuse(self, sender: str, order: FlightOrder) -> str | None:
+        if sender != self.dispatcher:
+            return "orders are accepted from the DroneX dispatcher only"
+        cutoff = time.monotonic() - self.PENDING_TTL_S
+        for oid in [o for o, t in self._pending_at.items() if t < cutoff or o not in self.pending]:
+            self._pending_at.pop(oid, None)
+            self.pending.pop(oid, None)
+        if order.order_id in self.running or order.order_id in self.pending:
+            return "that order is already being flown"
+        if len(self.running) + len(self.pending) >= self.max_running:
+            return "the simulator is busy with other flights right now; please try again in a few minutes"
+        return None
 
 
 def main() -> None:
     s = load_settings()
-    api = RenderApi(s.render_url)
+    exit_if_unsafe(s)
+    api = RenderApi(s.render_url, token=s.agent_token)
     agent = build_flight_agent(s, api)
     print("DroneX flight agent")
     for line in describe_missing(s):

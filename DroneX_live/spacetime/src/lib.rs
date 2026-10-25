@@ -8,10 +8,16 @@
 //! Fed by DroneX_live's mirror (one per computer, reading the simulation engine's socket), read by the
 //! configurator's Copilot page (subscriptions), and used by the Dispatch agents through the configurator's
 //! /api/airspace routes.
+//!
+//! Who may write: everyone may subscribe (the tables are public, so browsers read the airspace live), but only the
+//! module's owner and the identities in the private `writer` table may call the mutating reducers. The owner is the
+//! identity that published the database (`init` runs with the publisher as `ctx.sender()`); the owner adds DroneX's
+//! own server processes (the mirror and the configurator's server, sharing one token) with `add_writer`. The
+//! housekeeping `tick` runs only on the module's own schedule.
 
 mod geo;
 
-use spacetimedb::{ReducerContext, ScheduleAt, Table};
+use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table};
 use std::time::Duration;
 
 /// Corridors closer than this (edge to edge) conflict, metres.
@@ -22,6 +28,36 @@ const VERTICAL_BUFFER_M: f64 = 10.0;
 const OFFLINE_AFTER_US: i64 = 15_000_000;
 /// The housekeeping tick.
 const TICK_MS: u64 = 2_000;
+/// How often the tick prunes old rows, microseconds.
+const PRUNE_EVERY_US: i64 = 60_000_000;
+/// Corridors that were never granted are deleted this long after the request; released and expired ones this long
+/// after their expiry time.
+const ENDED_CORRIDOR_TTL_US: i64 = 3_600_000_000;
+/// Incidents are deleted this long after they happened.
+const INCIDENT_TTL_US: i64 = 3_600_000_000;
+/// A vehicle offline for this long is deleted, with its position and its mission assignment.
+const OFFLINE_VEHICLE_TTL_US: i64 = 600_000_000;
+
+/// The module's own settings (one row, id 0). Private: subscribers never see it.
+#[spacetimedb::table(accessor = config)]
+pub struct Config {
+    #[primary_key]
+    pub id: u8,
+    /// The identity that published the database; the only one that may add or remove writers.
+    pub owner: Identity,
+    /// The last time the tick pruned old rows, microseconds since the Unix epoch.
+    pub pruned_at: i64,
+    /// The last keepalive call, microseconds since the Unix epoch.
+    pub keepalive_at: i64,
+}
+
+/// The identities allowed to call the mutating reducers (besides the owner). Private.
+#[spacetimedb::table(accessor = writer)]
+pub struct Writer {
+    #[primary_key]
+    pub identity: Identity,
+    pub added_at: i64,
+}
 
 #[spacetimedb::table(accessor = vehicle, public)]
 pub struct Vehicle {
@@ -126,10 +162,69 @@ fn now_us(ctx: &ReducerContext) -> i64 {
     ctx.timestamp.to_micros_since_unix_epoch()
 }
 
+fn owner(ctx: &ReducerContext) -> Option<Identity> {
+    ctx.db.config().id().find(0).map(|c| c.owner)
+}
+
+fn require_owner(ctx: &ReducerContext) -> Result<(), String> {
+    match owner(ctx) {
+        Some(o) if o == ctx.sender() => Ok(()),
+        _ => Err("only the airspace's owner may do this".into()),
+    }
+}
+
+/// Every mutating reducer starts with this: the owner and the registered writers pass, everyone else is refused.
+fn require_writer(ctx: &ReducerContext) -> Result<(), String> {
+    let sender = ctx.sender();
+    if owner(ctx) == Some(sender) || ctx.db.writer().identity().find(sender).is_some() {
+        Ok(())
+    } else {
+        Err(format!("{} may read the airspace but not write to it", sender.to_hex()))
+    }
+}
+
+/// Runs once, when the database is first published; the sender is the publishing identity, which becomes the owner
+/// (checked against SpacetimeDB 2.13: `spacetime logs` shows the publisher's identity). A database published before
+/// the allow-list existed has no owner, so nobody can add writers: republish it with a clean database.
 #[spacetimedb::reducer(init)]
 pub fn init(ctx: &ReducerContext) {
+    if ctx.db.config().id().find(0).is_none() {
+        log::info!("DroneX airspace: owner is {}", ctx.sender().to_hex());
+        ctx.db.config().insert(Config { id: 0, owner: ctx.sender(), pruned_at: 0, keepalive_at: 0 });
+    }
     log::info!("DroneX airspace: starting the housekeeping tick every {TICK_MS} ms");
     ctx.db.tick_timer().insert(TickTimer { scheduled_id: 0, scheduled_at: ScheduleAt::Interval(Duration::from_millis(TICK_MS).into()) });
+}
+
+/// Owner only: lets `identity` call the mutating reducers (DroneX's mirror and configurator server).
+#[spacetimedb::reducer]
+pub fn add_writer(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
+    require_owner(ctx)?;
+    if ctx.db.writer().identity().find(identity).is_none() {
+        ctx.db.writer().insert(Writer { identity, added_at: now_us(ctx) });
+    }
+    log::info!("writer added: {}", identity.to_hex());
+    Ok(())
+}
+
+/// Owner only: takes the write right away again.
+#[spacetimedb::reducer]
+pub fn remove_writer(ctx: &ReducerContext, identity: Identity) -> Result<(), String> {
+    require_owner(ctx)?;
+    ctx.db.writer().identity().delete(identity);
+    log::info!("writer removed: {}", identity.to_hex());
+    Ok(())
+}
+
+/// Writers only: a tiny write the mirror makes every few hours, so a hosted database never looks idle.
+#[spacetimedb::reducer]
+pub fn keepalive(ctx: &ReducerContext) -> Result<(), String> {
+    require_writer(ctx)?;
+    if let Some(mut c) = ctx.db.config().id().find(0) {
+        c.keepalive_at = now_us(ctx);
+        ctx.db.config().id().update(c);
+    }
+    Ok(())
 }
 
 /// A vehicle appears or changes (name, design, presence, arming, mode). Called by the mirror and by agents.
@@ -147,6 +242,7 @@ pub fn upsert_vehicle(
     mode: String,
     size_cm: Option<f64>,
 ) -> Result<(), String> {
+    require_writer(ctx)?;
     if id.is_empty() {
         return Err("a vehicle needs an id".into());
     }
@@ -176,6 +272,7 @@ pub fn report_position(
     ekf_status: Option<String>,
     time_us: i64,
 ) -> Result<(), String> {
+    require_writer(ctx)?;
     if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
         return Err(format!("{vehicle_id}: position {lat}, {lon} is off the planet"));
     }
@@ -198,10 +295,10 @@ pub fn report_position(
 
 #[spacetimedb::reducer]
 pub fn record_incident(ctx: &ReducerContext, vehicle_id: String, kind: String, detail: String, lat: f64, lon: f64, time_us: i64) -> Result<(), String> {
+    require_writer(ctx)?;
     if kind.is_empty() {
         return Err("an incident needs a kind".into());
     }
-    let _ = ctx;
     ctx.db.incident().insert(Incident { id: 0, vehicle_id, kind, detail, lat, lon, time_us });
     Ok(())
 }
@@ -235,6 +332,7 @@ pub fn request_corridor(
     width_m: f64,
     ttl_s: u64,
 ) -> Result<(), String> {
+    require_writer(ctx)?;
     if request_id.is_empty() || vehicle_id.is_empty() {
         return Err("a corridor request needs a request_id and a vehicle_id".into());
     }
@@ -298,6 +396,7 @@ pub fn request_corridor(
 
 #[spacetimedb::reducer]
 pub fn release_corridor(ctx: &ReducerContext, id: u64) -> Result<(), String> {
+    require_writer(ctx)?;
     let mut c = ctx.db.corridor().id().find(&id).ok_or_else(|| format!("no corridor {id}"))?;
     if c.status == "granted" {
         c.status = "released".into();
@@ -308,6 +407,7 @@ pub fn release_corridor(ctx: &ReducerContext, id: u64) -> Result<(), String> {
 
 #[spacetimedb::reducer]
 pub fn assign_mission(ctx: &ReducerContext, vehicle_id: String, mission_id: String, agent: String, status: String) -> Result<(), String> {
+    require_writer(ctx)?;
     if vehicle_id.is_empty() || mission_id.is_empty() {
         return Err("an assignment needs a vehicle_id and a mission_id".into());
     }
@@ -321,9 +421,13 @@ pub fn assign_mission(ctx: &ReducerContext, vehicle_id: String, mission_id: Stri
 }
 
 /// Housekeeping: expire granted corridors past their time; mark vehicles offline after OFFLINE_AFTER_US without
-/// a position (stale halfway there).
+/// a position (stale halfway there); once a minute, prune old rows. Runs only on the module's own schedule: a
+/// scheduled call comes from the database's own identity, a client call does not.
 #[spacetimedb::reducer]
 pub fn tick(ctx: &ReducerContext, _timer: TickTimer) -> Result<(), String> {
+    if ctx.sender() != ctx.database_identity() {
+        return Err("tick runs on the module's schedule only".into());
+    }
     let now = now_us(ctx);
     let expired: Vec<Corridor> = ctx.db.corridor().status().filter("granted").filter(|c| c.expires_at <= now).collect();
     for mut c in expired {
@@ -345,5 +449,49 @@ pub fn tick(ctx: &ReducerContext, _timer: TickTimer) -> Result<(), String> {
             ctx.db.vehicle().id().update(v);
         }
     }
+    prune(ctx, now);
     Ok(())
+}
+
+/// Deletes what nobody needs any more, at most once per PRUNE_EVERY_US: corridors never granted and requested more
+/// than an hour ago, released or expired corridors an hour past their expiry, incidents older than an hour, and
+/// vehicles offline for ten minutes together with their position and mission assignment.
+fn prune(ctx: &ReducerContext, now: i64) {
+    let Some(mut cfg) = ctx.db.config().id().find(0) else { return };
+    if now - cfg.pruned_at < PRUNE_EVERY_US {
+        return;
+    }
+    cfg.pruned_at = now;
+    ctx.db.config().id().update(cfg);
+
+    let corridors: Vec<u64> = ctx
+        .db
+        .corridor()
+        .iter()
+        .filter(|c| match c.status.as_str() {
+            "granted" => false,
+            "refused" => now - c.requested_at > ENDED_CORRIDOR_TTL_US,
+            _ => now - c.expires_at > ENDED_CORRIDOR_TTL_US,
+        })
+        .map(|c| c.id)
+        .collect();
+    for id in &corridors {
+        ctx.db.corridor().id().delete(id);
+    }
+
+    let incidents: Vec<u64> = ctx.db.incident().iter().filter(|i| now - i.time_us > INCIDENT_TTL_US).map(|i| i.id).collect();
+    for id in &incidents {
+        ctx.db.incident().id().delete(id);
+    }
+
+    let vehicles: Vec<String> = ctx.db.vehicle().iter().filter(|v| v.presence == "offline" && now - v.updated_at > OFFLINE_VEHICLE_TTL_US).map(|v| v.id).collect();
+    for id in &vehicles {
+        ctx.db.position().vehicle_id().delete(id);
+        ctx.db.mission_assignment().vehicle_id().delete(id);
+        ctx.db.vehicle().id().delete(id);
+    }
+
+    if !corridors.is_empty() || !incidents.is_empty() || !vehicles.is_empty() {
+        log::info!("pruned {} corridors, {} incidents, {} offline vehicles", corridors.len(), incidents.len(), vehicles.len());
+    }
 }

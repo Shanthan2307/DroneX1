@@ -78,11 +78,26 @@ The fleet and the flight agent talk to the dispatcher locally (addresses derive 
 | Key | What |
 |---|---|
 | `INTENT_API_BASE`, `INTENT_API_KEY`, `INTENT_MODEL` | the ASI:One model (https://asi1.ai/dashboard/api-keys); any OpenAI-compatible endpoint works |
-| `DRONEX_RENDER_URL` | the configurator, default `http://localhost:3000` |
-| `DRONEX_DISPATCHER_SEED`, `DRONEX_FLEET_SEED`, `DRONEX_FLIGHT_SEED` | long random strings; they fix the agents' addresses |
+| `DRONEX_RENDER_URL` | the configurator's API, as the agents reach it; default `http://127.0.0.1:3000` |
+| `DRONEX_PUBLIC_URL` | the configurator link sent to users (build and Copilot links); default `DRONEX_RENDER_URL` |
+| `DRONEX_SIM_UI_URL` | the simulator's 3D map link sent to users; default `http://127.0.0.1:45010` |
+| `DRONEX_AGENT_TOKEN` | sent as `x-dronex-agent` on every configurator call; the configurator's agent-only routes (stopping vehicles) need it |
+| `DRONEX_DISPATCHER_SEED`, `DRONEX_FLEET_SEED`, `DRONEX_FLIGHT_SEED` | long random strings; they fix the agents' addresses. With any mailbox on, the agents refuse to start while one is still the public development seed |
 | `AGENTVERSE_API_KEY` | connects the dispatcher's mailbox from the terminal (`scripts/connect_agentverse.py`) |
-| `DRONEX_MAILBOX` | `1` (default) for the dispatcher's Agentverse mailbox; `0` for a local-only test |
-| `DRONEX_PAYMENTS`, `DRONEX_PAYMENTS_LEDGER`, `DRONEX_FLIGHT_PRICE_FET` | the Payment Protocol bonus: quote a price per flight; with the ledger flag the dispatcher pays testnet FET on Dorado (fund its wallet from the faucet) and the flight agent checks the transaction on chain before flying |
+| `DRONEX_MAILBOX` | `1` (default) for the dispatcher's Agentverse mailbox; `0` for a local-only test (development seeds allowed) |
+| `DRONEX_PAYMENTS`, `DRONEX_PAYMENTS_LEDGER`, `DRONEX_FLIGHT_PRICE_FET` | off by default; keep them off on a public deployment. The Payment Protocol bonus: quote a price per flight; with the ledger flag the dispatcher pays testnet FET on Dorado (fund its wallet from the faucet) and the flight agent checks the transaction on chain before flying. The dispatcher pays only the flight agent's wallet, only for an open order, never above the price; the flight agent accepts commits only from the dispatcher, at the price or more |
+| `DRONEX_DISPATCH_MAX_ACTIVE` | Dispatch vehicles in the simulator at once, across all users; default `3` (one per user always) |
+| `DRONEX_DISPATCH_TTL_MIN` | minutes a flown vehicle stays before the dispatcher stops it (`/api/sim/stop`); default `10`. Users can say "end flight" sooner |
+| `DRONEX_DISPATCH_COOLDOWN_S` | seconds between two dispatches by the same user; default `60` |
+| `DRONEX_DISPATCH_RATE_PER_MIN`, `DRONEX_DISPATCH_RATE_PER_DAY` | chat messages per user; defaults `10` and `100` |
+| `DRONEX_DISPATCH_DAILY_MODEL_CALLS` | model calls per UTC day across all users; default `500`. Past it the rule parser answers |
+| `DRONEX_DISPATCH_MAX_INPUT_CHARS` | longest chat message processed; default `1500` |
+| `DRONEX_LOG_STDOUT` | `1`: the agents log to stdout (for journald under systemd) instead of `logs/*.log` |
+
+Only the dispatcher may order flights: the flight agent ignores orders from any other address, and sends progress
+and results to the dispatcher whatever `reply_to` says. Pilot commands relayed during a flight are locked to the
+user's own vehicle (`lockVehicle`). Sessions idle for a day are deleted. The active vehicles are kept in the
+dispatcher's agent storage, so a restart still stops them on time.
 
 ## Before the demo
 
@@ -100,7 +115,9 @@ DroneX_agents/.venv/bin/python -m pytest
 Card payload shapes against the documented schemas, card-response parsing (JSON and planner prose), request
 parsing with a mocked model and the rule fallback, candidate ranking, swap search over a mocked `/api/verdict`,
 the render API client over a mock transport, design picking, the flight sequence (pre-arm wait, takeoff retries,
-corridor granted / refused / airspace off), fleet replies, deterministic addresses. No network.
+corridor granted / refused / airspace off), fleet replies, deterministic addresses, and the public limits
+(`tests/test_limits.py`: seeds, agent token, lockVehicle, simulator full, order sender, rate limits, model budget,
+active vehicles and their TTL stop, session pruning, payment checks). No network.
 
 ## Files
 
@@ -108,6 +125,7 @@ corridor granted / refused / airspace off), fleet replies, deterministic address
 dronex_agents/config.py      settings from .env.local; preset ids; seeds
 dronex_agents/addresses.py   seed → address; LocalFirstResolver (local agents by rule, the world by Almanac)
 dronex_agents/render_api.py  typed client for the configurator's routes
+dronex_agents/limits.py      rate limits, model budget, active vehicles and their TTL, session pruning
 dronex_agents/cards.py       Interactive Cards builders and the answer parser
 dronex_agents/mission.py     request parsing (model + rules), mission mapping, ranking, swap search, review rows
 dronex_agents/protocol.py    CapabilityQuery/Reply, FlightOrder/Progress/Result, PaymentQuote

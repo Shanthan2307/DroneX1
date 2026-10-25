@@ -30,6 +30,10 @@ Where Elastic is used (also in the app's "Built with" sidebar):
 | `dronex-catalog-notes` | dataset record (53) | `notes`, `source`, `numbers.*`, `text` (semantic_text) |
 | `dronex-formulas` | exported physics function with a comment | `function_name`, `comment`, `text` (semantic_text) |
 
+`dronex-telemetry` and `dronex-events` are data streams with a retention lifecycle (`ELASTIC_RETENTION`, default `7d`):
+older documents are deleted by the cluster. An index of the same name created before this stays a plain index
+without retention until `npm run elastic:setup -- --recreate` (which drops and rebuilds every index).
+
 A flight is a vehicle-online to vehicle-offline span because a simulated vehicle appears when the simulator starts
 it and goes when it is stopped; arming and disarming are events inside it.
 

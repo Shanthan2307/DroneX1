@@ -167,8 +167,19 @@ export class Mirror {
     for (const s of this.sinks) await s.onFix?.(fix, v);
   }
 
+  /**
+   * Runs until something it depends on is gone, then exits with status 1 so systemd restarts it with
+   * fresh connections: when the engine's socket closes, or after MIRROR_MAX_TICK_FAILURES ticks (default 10) fail
+   * in a row. The SpacetimeDB sink exits the same way when its connection drops.
+   */
   async run(): Promise<never> {
     for (const s of this.sinks) await s.start?.();
+    this.daemon.onClose((err) => {
+      console.error(`[mirror] ${err.message}; exiting so the service restarts`);
+      process.exit(1);
+    });
+    const maxFailures = Math.max(1, Number(process.env.MIRROR_MAX_TICK_FAILURES ?? "10") || 10);
+    let failuresInARow = 0;
     this.daemon.onNotification((method, params) => {
       if (method === "telemetry/update") void this.onTelemetry(params as RawTelemetry).catch((e) => console.error("[mirror] telemetry", e));
     });
@@ -183,8 +194,14 @@ export class Mirror {
       try {
         await this.pollVehicles();
         for (const s of this.sinks) await s.flush?.();
+        failuresInARow = 0;
       } catch (e) {
-        console.error("[mirror] tick", e instanceof Error ? e.message : e);
+        failuresInARow++;
+        console.error(`[mirror] tick (${failuresInARow}/${maxFailures} in a row)`, e instanceof Error ? e.message : e);
+        if (failuresInARow >= maxFailures) {
+          console.error("[mirror] too many failed ticks in a row; exiting so the service restarts");
+          process.exit(1);
+        }
       }
       if (tick % 60 === 0) console.log(`[mirror] ${this.vehicles.size} vehicles known, ${[...this.vehicles.values()].filter((v) => v.presence === "online").length} online`);
     }
