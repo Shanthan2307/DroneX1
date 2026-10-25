@@ -21,7 +21,20 @@ Francisco, with solid buildings in its way.
 | **Test** | Swap motors, propellers, batteries, payloads and airframes with compatibility checks, then test against six missions (sub-250 g urban scan, 15 km medical delivery, 40 min search and rescue, 160 km/h sprint, 10 km long-range, crop survey). Pass or fail per requirement, with the reason. |
 | **Fly** | **Fly in simulation** sends the exact drone to the simulator: its battery, hover throttle and airspeeds become ArduPilot parameters, its 3D model flies on the map. Arm, take off, go to a landmark, fly a mission. |
 | **Talk to it in the air** | The **Copilot** page (`/copilot`): spoken commands ("take off to thirty metres") and spoken callouts (GPS, arming, altitude bands, battery), beside a live map of the shared airspace. |
+| **Run the track scenarios** | **Scenarios** (`/scenarios`): one runnable story per technology, each a real mission in the simulator. Two operators' crossing corridors refused and re-granted by SpacetimeDB; a flight investigated in Elastic; a patrol flown by voice through Cartesia; a clinic's request dispatched by the Fetch.ai agents. The missions also sit in the simulator's plan library. |
 | **Dispatch from ASI:One** | **DroneX Dispatch**: say the job in ASI:One ("run a 160 km/h sprint over 2 km, back in 5 minutes"); agents find a hangar drone that passes, show the verdict, and on approval fly it in the simulator. |
+
+## The track scenarios
+
+Each sponsor technology gets a story where it does the job it is best at, run against the real engines from
+`/scenarios` (about 3–4 minutes each, all four checked end to end):
+
+| Track | Scenario | What it shows |
+|---|---|---|
+| SpacetimeDB | **Two operators, one sky.** A UCSF courier holds a 75–95 m corridor over Mission Bay; a survey hexacopter asks to cross it in the same band and the reducer refuses ("climb above 105 m"); it asks at 110–130 m, is granted, and both fly their missions. | Rules enforced next to the data, atomically, seen live by every client. |
+| Elastic | **After the flight, find the signal.** The courier flies Mission Bay → Pier 40 and back; ES\|QL over the telemetry finds a drain of about 11.5 %/min, which projects 8.7–8.9 min, within 0.1 min of the configurator's 8.8 min mixed-flying estimate; Jina semantic search over the 5,799-parameter manual answers "low battery failsafe action" with `BATT_FS_LOW_ACT`. | Design, flight and documentation in one cluster. |
+| Cartesia | **Hands on the sticks.** A patrol along the Embarcadero flown by voice: Sonic speaks each command, Ink hears it ("Take off to 30 meters"), the copilot acts, and the callouts (motors armed, airborne, mission leg two) are spoken as they fire. | Voice as the interface when hands and eyes are busy. |
+| Fetch.ai | **A clinic asks, the fleet answers.** A request through the dispatcher's Agentverse mailbox; the fleet agents answer from their verdicts, and the flight agent waits for GPS, reserves a corridor and flies. | Agents doing real, verifiable work. |
 
 ## Try it: a two-minute demo that really works
 
@@ -96,7 +109,7 @@ words. A swap is offered only after the physics has judged it.
 | **Cartesia** (Sonic TTS, Ink STT) | The voice of DroneX: Ask DroneX on the configurator (explain parts and missions, suggest swaps) and the flight copilot on `/copilot` (commands in, callouts out, barge-in). | `DroneX_render/src/components/assistant/`, `src/lib/ai/assistant.ts`, `src/components/copilot/` |
 | **Fetch.ai** (uAgents, Agentverse, ASI:One) | DroneX Dispatch: a sentence in ASI:One becomes a verified, flying vehicle; Interactive Cards; Payment Protocol with testnet FET checked on chain. The ASI:One model also parses intent. | `DroneX_agents/`, `DroneX_render/src/app/dispatch/` |
 | **SpacetimeDB** | The shared, persistent airspace: every vehicle, position, corridor and incident in tables; corridor grants and separation are reducers. | `DroneX_live/`, `DroneX_render/src/components/airspace/` |
-| **Elastic** | Flight analytics: fixes, events and verdicts indexed; ArduPilot's parameter manual and the physics notes as semantic text; an agent that finds the signal. | `DroneX_live/elastic/` |
+| **Elastic** | Flight analytics: fixes, events and verdicts indexed; ArduPilot's parameter manual and the physics notes as semantic text with Jina embeddings (measured best of six setups on this data: [results](DroneX_live/elastic/README.md#which-embedding-model-measured)); an agent that finds the signal. | `DroneX_live/elastic/` |
 | **ArduPilot SITL** | The real flight code, in software in the loop. | `dronex/DroneX_1/` |
 
 Every screen has a **Built with** sidebar saying exactly what each technology does on that screen and in which
@@ -141,6 +154,7 @@ NO_LIVE=1 ./dev.sh        # without the SpacetimeDB / Elastic mirror
 | Configurator + Ask DroneX | http://localhost:3000 |
 | Voice flight copilot + live airspace | http://localhost:3000/copilot |
 | DroneX Dispatch status | http://localhost:3000/dispatch |
+| Track scenarios | http://localhost:3000/scenarios |
 | Simulator | http://127.0.0.1:45010 |
 
 The first time, the simulator page shows a pairing code; approve it with
