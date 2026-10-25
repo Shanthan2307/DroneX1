@@ -31,7 +31,8 @@ export async function esql(env: ElasticEnv, query: string, timeoutMs = 8000): Pr
   return j.values.map((v) => Object.fromEntries(j.columns.map((c, i) => [c.name, v[i]])));
 }
 
-const quote = (s: string) => `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+// ES|QL string literals are double-quoted.
+const quote = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 
 export interface Build {
   airframeId: string | null;

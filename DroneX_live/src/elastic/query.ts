@@ -36,17 +36,17 @@ export interface FlightSummary {
 }
 
 export async function flightSummary(client: Client, prefix: string, flightId: string): Promise<FlightSummary | null> {
-  const q = (s: string) => s.replace(/'/g, "\\'");
+  const q = (s: string) => s.replace(/"/g, '\\"'); // ES|QL string literals are double-quoted
   const stats = await esql(
     client,
-    `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == '${q(flightId)}' | STATS fixes = COUNT(*), started = MIN(@timestamp), ended = MAX(@timestamp), alt_max = MAX(altitude_above_home_m), speed_max = MAX(ground_speed_mps), sats_min = MIN(gps_satellites), ekf_peak = MAX(ekf_variance), vehicle = VALUES(vehicle_name), design = VALUES(design_id)`,
+    `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == "${q(flightId)}" | STATS fixes = COUNT(*), started = MIN(@timestamp), ended = MAX(@timestamp), alt_max = MAX(altitude_above_home_m), speed_max = MAX(ground_speed_mps), sats_min = MIN(gps_satellites), ekf_peak = MAX(ekf_variance), vehicle = VALUES(vehicle_name), design = VALUES(design_id)`,
   );
   const s = stats[0];
   if (!s || Number(s.fixes) === 0) return null;
-  const ends = await esql(client, `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == '${q(flightId)}' AND battery_pct IS NOT NULL | SORT @timestamp ASC | KEEP @timestamp, battery_pct | LIMIT 1`);
-  const endsLast = await esql(client, `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == '${q(flightId)}' AND battery_pct IS NOT NULL | SORT @timestamp DESC | KEEP @timestamp, battery_pct | LIMIT 1`);
-  const events = await esql(client, `FROM ${INDEX.events(prefix)} | WHERE flight_id == '${q(flightId)}' | SORT @timestamp ASC | KEEP @timestamp, type, detail | LIMIT 200`);
-  const score = await esql(client, `FROM ${INDEX.scores(prefix)} | WHERE flight_id == '${q(flightId)}' | LIMIT 1`);
+  const ends = await esql(client, `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == "${q(flightId)}" AND battery_pct IS NOT NULL | SORT @timestamp ASC | KEEP @timestamp, battery_pct | LIMIT 1`);
+  const endsLast = await esql(client, `FROM ${INDEX.telemetry(prefix)} | WHERE flight_id == "${q(flightId)}" AND battery_pct IS NOT NULL | SORT @timestamp DESC | KEEP @timestamp, battery_pct | LIMIT 1`);
+  const events = await esql(client, `FROM ${INDEX.events(prefix)} | WHERE flight_id == "${q(flightId)}" | SORT @timestamp ASC | KEEP @timestamp, type, detail | LIMIT 200`);
+  const score = await esql(client, `FROM ${INDEX.scores(prefix)} | WHERE flight_id == "${q(flightId)}" | LIMIT 1`);
   const started = typeof s.started === "string" ? s.started : null;
   const ended = typeof s.ended === "string" ? s.ended : null;
   return {
@@ -87,9 +87,9 @@ export async function fleetStats(client: Client, prefix: string, key: { designId
   let where: string;
   if (key.build) {
     const parts = ["airframeId", "motorId", "propellerId", "batteryId", "payloadId"] as const;
-    where = parts.map((k) => (key.build?.[k] ? `build.${k} == '${q(key.build[k] as string)}'` : `build.${k} IS NULL`)).join(" AND ");
+    where = parts.map((k) => (key.build?.[k] ? `build.${k} == "${q(key.build[k] as string)}"` : `build.${k} IS NULL`)).join(" AND ");
   } else if (key.designId) {
-    where = `design_id == '${q(key.designId)}' OR based_on == '${q(key.designId)}'`;
+    where = `design_id == "${q(key.designId)}" OR based_on == "${q(key.designId)}"`;
   } else {
     throw new Error("designId or build is required");
   }
@@ -102,7 +102,7 @@ export async function fleetStats(client: Client, prefix: string, key: { designId
     .map((r) => ({ mission_id: String(r.mission_id), ready: r.ready === true, failing_checks: Array.isArray(r.failing_checks) ? (r.failing_checks as string[]) : typeof r.failing_checks === "string" ? [r.failing_checks] : [] }));
   const empty: FleetStats = { design_ids: designIds, verdict_missions: verdictMissions, flights: 0, scored: 0, anomalous: 0, anomalies: {}, last_flight: null, line: "" };
   if (designIds.length === 0) return { ...empty, line: "no simulated runs yet" };
-  const inList = designIds.map((d) => `'${q(d)}'`).join(", ");
+  const inList = designIds.map((d) => `"${q(d)}"`).join(", ");
   const flights = await esql(client, `FROM ${INDEX.flights(prefix)} | WHERE design_id IN (${inList}) | STATS n = COUNT_DISTINCT(flight_id)`);
   const scores = await esql(client, `FROM ${INDEX.scores(prefix)} | WHERE design_id IN (${inList}) | STATS scored = COUNT(*), anomalous = COUNT(*) WHERE anomalous == true`);
   const reasons = await esql(client, `FROM ${INDEX.scores(prefix)} | WHERE design_id IN (${inList}) AND anomalous == true | MV_EXPAND anomalies | STATS n = COUNT(*) BY anomalies | SORT n DESC | LIMIT 10`);
