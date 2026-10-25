@@ -1,5 +1,10 @@
 # Deploying DroneX live
 
+> **Status (2026-10-25):** the code changes below (Part A and most of Part B) are implemented and tested on macOS;
+> the deploy kit is in [`deploy/`](../deploy/) with its runbook in [`deploy/README.md`](../deploy/README.md).
+> Not yet done: a run on a real Linux VM, the 3D page checked in a browser as a guest, and the keys, domain and VM
+> listed under "What the human must provide". Item 32 keeps the 40 MB model limit (two presets were never exported).
+
 **Summary**
 1. **Topology:** one Ubuntu 24.04 LTS VM runs Core with its SITL children, the account backend, the Next.js configurator, the DroneX_live mirror, the Dispatch agents and Caddy. All of them run under systemd as a `dronex` user. SpacetimeDB (Maincloud), Elastic Serverless, Agentverse/ASI:One, Cartesia and the intent LLM are hosted services.
 2. **Public URLs:**
