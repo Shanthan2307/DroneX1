@@ -66,6 +66,58 @@ const unproject = (f: Frame, x: number, y: number): { lat: number; lon: number }
 
 const STATUS_COLOR: Record<string, string> = { granted: "#7c5cff", refused: "#ff4d6d", released: "#4b5263", expired: "#4b5263" };
 
+/** Mirrors every table into the store, calling `bump` after each change. */
+function watchTables(c: DbConnection, s: Store, bump: () => void): void {
+  c.db.vehicle.onInsert((_ctx, r: Vehicle) => {
+    s.vehicles.set(r.id, toVehicle(r));
+    bump();
+  });
+  c.db.vehicle.onUpdate((_ctx, _o: Vehicle, r: Vehicle) => {
+    s.vehicles.set(r.id, toVehicle(r));
+    bump();
+  });
+  c.db.vehicle.onDelete((_ctx, r: Vehicle) => {
+    s.vehicles.delete(r.id);
+    bump();
+  });
+  c.db.position.onInsert((_ctx, r: Position) => {
+    s.positions.set(r.vehicleId, toPosition(r));
+    bump();
+  });
+  c.db.position.onUpdate((_ctx, _o: Position, r: Position) => {
+    s.positions.set(r.vehicleId, toPosition(r));
+    bump();
+  });
+  c.db.position.onDelete((_ctx, r: Position) => {
+    s.positions.delete(r.vehicleId);
+    bump();
+  });
+  c.db.corridor.onInsert((_ctx, r: Corridor) => {
+    s.corridors.set(Number(r.id), toCorridor(r));
+    bump();
+  });
+  c.db.corridor.onUpdate((_ctx, _o: Corridor, r: Corridor) => {
+    s.corridors.set(Number(r.id), toCorridor(r));
+    bump();
+  });
+  c.db.corridor.onDelete((_ctx, r: Corridor) => {
+    s.corridors.delete(Number(r.id));
+    bump();
+  });
+  c.db.incident.onInsert((_ctx, r: Incident) => {
+    s.incidents.set(Number(r.id), toIncident(r));
+    bump();
+  });
+  c.db.missionAssignment.onInsert((_ctx, r: MissionAssignment) => {
+    s.missions.set(r.vehicleId, toMission(r));
+    bump();
+  });
+  c.db.missionAssignment.onUpdate((_ctx, _o: MissionAssignment, r: MissionAssignment) => {
+    s.missions.set(r.vehicleId, toMission(r));
+    bump();
+  });
+}
+
 export default function AirspaceView() {
   const [state, setState] = useState<State>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -74,10 +126,17 @@ export default function AirspaceView() {
   const connRef = useRef<DbConnection | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [showOld, setShowOld] = useState(false);
-  const [nowUs, setNowUs] = useState(() => Date.now() * 1000);
+  // The clock starts at 0 and is read only in the effect: the page is prerendered, where reading the time during
+  // render is not allowed (cacheComponents). Until the first tick nothing is hidden.
+  const [nowUs, setNowUs] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNowUs(Date.now() * 1000), 30_000);
-    return () => clearInterval(t);
+    const tick = () => setNowUs(Date.now() * 1000);
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
   }, []);
   const [points, setPoints] = useState<{ lat: number; lon: number }[]>([]);
   const [band, setBand] = useState<{ min: number; max: number }>({ min: 30, max: 60 });
@@ -88,89 +147,71 @@ export default function AirspaceView() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const { uri, db } = airspaceTarget();
 
+  // One subscription, reconnected with backoff (1 s doubling to 30 s) whenever it drops or cannot connect, e.g.
+  // while Maincloud wakes a paused database. The store is emptied first: the new subscription re-inserts every row.
   useEffect(() => {
     const s = store.current;
-    // A connection this effect has already closed (React mounts effects twice in development) still reports
-    // "closed before the connection is established"; only the live one may change what the page shows.
-    let alive = true;
-    const bump = () => alive && setData(snapshotOf(s));
-    const conn = DbConnection.builder()
-      .withUri(uri)
-      .withDatabaseName(db)
-      .onConnect((c) => {
-        c.db.vehicle.onInsert((_ctx, r: Vehicle) => {
-          s.vehicles.set(r.id, toVehicle(r));
-          bump();
-        });
-        c.db.vehicle.onUpdate((_ctx, _o: Vehicle, r: Vehicle) => {
-          s.vehicles.set(r.id, toVehicle(r));
-          bump();
-        });
-        c.db.vehicle.onDelete((_ctx, r: Vehicle) => {
-          s.vehicles.delete(r.id);
-          bump();
-        });
-        c.db.position.onInsert((_ctx, r: Position) => {
-          s.positions.set(r.vehicleId, toPosition(r));
-          bump();
-        });
-        c.db.position.onUpdate((_ctx, _o: Position, r: Position) => {
-          s.positions.set(r.vehicleId, toPosition(r));
-          bump();
-        });
-        c.db.position.onDelete((_ctx, r: Position) => {
-          s.positions.delete(r.vehicleId);
-          bump();
-        });
-        c.db.corridor.onInsert((_ctx, r: Corridor) => {
-          s.corridors.set(Number(r.id), toCorridor(r));
-          bump();
-        });
-        c.db.corridor.onUpdate((_ctx, _o: Corridor, r: Corridor) => {
-          s.corridors.set(Number(r.id), toCorridor(r));
-          bump();
-        });
-        c.db.corridor.onDelete((_ctx, r: Corridor) => {
-          s.corridors.delete(Number(r.id));
-          bump();
-        });
-        c.db.incident.onInsert((_ctx, r: Incident) => {
-          s.incidents.set(Number(r.id), toIncident(r));
-          bump();
-        });
-        c.db.missionAssignment.onInsert((_ctx, r: MissionAssignment) => {
-          s.missions.set(r.vehicleId, toMission(r));
-          bump();
-        });
-        c.db.missionAssignment.onUpdate((_ctx, _o: MissionAssignment, r: MissionAssignment) => {
-          s.missions.set(r.vehicleId, toMission(r));
-          bump();
-        });
-        c.subscriptionBuilder()
-          .onApplied(() => {
-            if (!alive) return;
-            setState("live");
-            setError(null);
-            bump();
-          })
-          .onError((ctx) => {
-            if (!alive) return;
-            setState("error");
-            setError(ctx.event instanceof Error ? ctx.event.message : "subscription failed");
-          })
-          .subscribe([tables.vehicle, tables.position, tables.corridor, tables.incident, tables.missionAssignment]);
-      })
-      .onConnectError((_ctx, e) => {
-        if (!alive) return;
-        setState("error");
-        setError(e instanceof Error ? e.message : String(e));
-      })
-      .onDisconnect(() => alive && setState("connecting"))
-      .build();
-    connRef.current = conn;
+    // React mounts effects twice in development: a connection this effect has already closed (or replaced) still
+    // reports, so only the current one may change what the page shows.
+    let stopped = false;
+    const bump = () => {
+      if (!stopped) setData(snapshotOf(s));
+    };
+    let attempt = 0;
+    let generation = 0; // callbacks from a replaced connection are ignored
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const retry = (why: string) => {
+      if (stopped || timer) return;
+      setState("connecting");
+      setError(why);
+      const delay = Math.min(1000 * 2 ** attempt, 30_000);
+      attempt += 1;
+      timer = setTimeout(() => {
+        timer = null;
+        connect();
+      }, delay);
+    };
+    const connect = () => {
+      if (stopped) return;
+      const gen = ++generation;
+      const current = () => gen === generation;
+      connRef.current?.disconnect();
+      Object.assign(s, emptyStore());
+      bump();
+      connRef.current = DbConnection.builder()
+        .withUri(uri)
+        .withDatabaseName(db)
+        .onConnect((c) => {
+          watchTables(c, s, bump);
+          c.subscriptionBuilder()
+            .onApplied(() => {
+              if (!current()) return;
+              attempt = 0;
+              setState("live");
+              setError(null);
+              bump();
+            })
+            .onError((ctx) => {
+              if (!current()) return;
+              setState("error");
+              setError(ctx.event instanceof Error ? ctx.event.message : "subscription failed");
+            })
+            .subscribe([tables.vehicle, tables.position, tables.corridor, tables.incident, tables.missionAssignment]);
+        })
+        .onConnectError((_ctx, e) => {
+          if (current()) retry(e instanceof Error ? e.message : String(e));
+        })
+        .onDisconnect((_ctx, e) => {
+          if (current()) retry(e ? e.message : "disconnected");
+        })
+        .build();
+    };
+    connect();
     return () => {
-      alive = false;
-      conn.disconnect();
+      stopped = true;
+      generation += 1;
+      if (timer) clearTimeout(timer);
+      connRef.current?.disconnect();
       connRef.current = null;
     };
   }, [uri, db]);
@@ -315,7 +356,7 @@ export default function AirspaceView() {
         <div style={{ position: "absolute", top: 10, left: 12, fontSize: 12, color: state === "live" ? "#2bb7a0" : state === "error" ? "#ff4d6d" : "#9aa3b2" }}>
           SpacetimeDB · {db} · {state}
           {error ? ` · ${error}` : ""}
-          {state === "error" ? " · start it with DroneX_live/scripts/spacetime-start.sh and publish with spacetime-publish.sh" : ""}
+          {state === "error" && process.env.NODE_ENV !== "production" ? " · start it with DroneX_live/scripts/spacetime-start.sh and publish with spacetime-publish.sh" : ""}
         </div>
         {!frame && state === "live" && (
           <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#9aa3b2", fontSize: 13 }}>No vehicle in the airspace yet. Press Fly in simulation; the mirror publishes it here.</div>

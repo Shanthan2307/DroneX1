@@ -1,9 +1,10 @@
 // Drones sent to the simulator, kept on disk so the simulation engine's map can fetch the 3D model and the
 // configurator can reopen the design: .dronex/sim/<id>/{design.json, profile.json, model.glb} in the repo
 // (gitignored). Server-only. Ids are the server's own, so a client cannot pick a path.
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
+import type { StoredDesign } from "./limits";
 
 export const ID_RE = /^s-[a-f0-9]{12}$/;
 
@@ -66,4 +67,48 @@ export async function listFlights(): Promise<StoredFlight[]> {
     out.push({ id, name: design.name ?? id, basedOn: design.basedOn ?? null, createdAt: design.createdAt ?? "", profile: { vehicle: profile.vehicle, frame: profile.frame, span_m: profile.span_m } });
   }
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Pinned designs (the hangar drones the agents fly) are never pruned: "pinned": true in design.json, or listed
+ *  in DRONEX_PINNED_DESIGNS (comma-separated ids). */
+const pinnedByEnv = (): Set<string> => new Set((process.env.DRONEX_PINNED_DESIGNS ?? "").split(",").map((s) => s.trim()).filter(Boolean));
+
+export async function isPinned(id: string, design?: unknown): Promise<boolean> {
+  if (pinnedByEnv().has(id)) return true;
+  const d = design ?? (await readFlight(id))?.design;
+  return typeof d === "object" && d !== null && (d as { pinned?: unknown }).pinned === true;
+}
+
+/** Every design folder with its age (folder mtime), size and pin, for the store reaper. */
+export async function storedDesigns(): Promise<StoredDesign[]> {
+  let ids: string[];
+  try {
+    ids = (await readdir(root())).filter((d) => ID_RE.test(d));
+  } catch {
+    return [];
+  }
+  const out: StoredDesign[] = [];
+  for (const id of ids) {
+    const dir = path.join(root(), id);
+    try {
+      const files = await readdir(dir);
+      const sizes = await Promise.all(files.map((f) => stat(path.join(dir, f)).then((s) => s.size)));
+      const design = await readIn(id, "design.json");
+      let parsed: unknown = null;
+      try {
+        parsed = design ? JSON.parse(design.toString("utf8")) : null;
+      } catch {
+        parsed = null;
+      }
+      out.push({ id, createdAt: (await stat(dir)).mtimeMs, bytes: sizes.reduce((a, b) => a + b, 0), pinned: await isPinned(id, parsed) });
+    } catch {
+      // vanished while listing
+    }
+  }
+  return out;
+}
+
+export async function deleteFlight(id: string): Promise<void> {
+  if (!ID_RE.test(id)) return;
+  await rm(path.join(root(), id), { recursive: true, force: true });
 }

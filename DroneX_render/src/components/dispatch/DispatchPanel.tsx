@@ -1,7 +1,8 @@
 "use client";
 // DroneX Dispatch at a glance: the three engines, the agents with their addresses and whether each is running,
 // where the dispatcher stands on Agentverse (local only, mailbox not connected, listed), the way into ASI:One, and
-// sentences to try. Polls /api/dispatch every five seconds; every fact on it comes from that route.
+// sentences to try. Polls /api/dispatch every 20 seconds; every fact on it comes from that route. On the public
+// site (status.public) the operator hints (scripts to run, ports) become "temporarily unavailable".
 import { useEffect, useState } from "react";
 import type { DispatchStatus } from "@/lib/dispatch/types";
 
@@ -39,9 +40,13 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 /** Where the dispatcher stands between "runs on this laptop" and "ASI:One can find it". */
+const UNAVAILABLE = "temporarily unavailable";
+
 function agentverseState(s: DispatchStatus): { tone: Tone; label: string; next: string } {
   const a = s.agents;
+  if (s.public && (!a || !s.live.dispatcher)) return { tone: "bad", label: "Dispatch is offline", next: UNAVAILABLE };
   if (!a || !s.live.dispatcher) return { tone: "bad", label: "Dispatcher not running", next: "Start the agents: DroneX_agents/dev.sh" };
+  if (s.public && (!a.dispatcher.mailbox || s.almanac?.type !== "mailbox" || !s.listing?.name)) return { tone: "warn", label: "Connecting to Agentverse", next: UNAVAILABLE };
   if (!a.dispatcher.mailbox) return { tone: "warn", label: "Local only (mailbox off)", next: "Restart without DRONEX_MAILBOX=0 so ASI:One can reach it" };
   if (s.almanac?.type !== "mailbox") return { tone: "warn", label: "Registering…", next: "The Almanac has not picked up the mailbox endpoint yet" };
   if (!s.listing?.name) return { tone: "warn", label: "Mailbox not connected", next: "Run DroneX_agents/scripts/connect_agentverse.py (AGENTVERSE_API_KEY), or the inspector's Connect → Mailbox" };
@@ -70,7 +75,7 @@ export default function DispatchPanel() {
       }
     };
     void load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(load, 20_000);
     return () => {
       alive = false;
       clearInterval(t);
@@ -92,8 +97,8 @@ export default function DispatchPanel() {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(380px, 1fr))", gap: 16, padding: 20, alignContent: "start" }}>
       <Card title="Three engines">
         <Row tone="ok" label="Rendering engine" detail="this configurator: parts, physics verdict, JSON routes" />
-        <Row tone={s.simulator ? "ok" : "bad"} label="Simulation engine" detail={s.simulator ? "Core daemon and ArduPilot SITL up" : "not running: ./dev.sh at the project root"} />
-        <Row tone={s.live.dispatcher && s.live.flight && s.live.fleet ? "ok" : s.live.dispatcher || s.live.flight || s.live.fleet ? "warn" : "bad"} label="Agents (Fetch.ai)" detail={a ? `dispatcher ${s.live.dispatcher ? "up" : "down"} · fleet ${s.live.fleet ? "up" : "down"} · flight ${s.live.flight ? "up" : "down"}` : "never started: DroneX_agents/dev.sh"} />
+        <Row tone={s.simulator ? "ok" : "bad"} label="Simulation engine" detail={s.simulator ? "Core daemon and ArduPilot SITL up" : s.public ? UNAVAILABLE : "not running: ./dev.sh at the project root"} />
+        <Row tone={s.live.dispatcher && s.live.flight && s.live.fleet ? "ok" : s.live.dispatcher || s.live.flight || s.live.fleet ? "warn" : "bad"} label="Agents (Fetch.ai)" detail={a ? `dispatcher ${s.live.dispatcher ? "up" : "down"} · fleet ${s.live.fleet ? "up" : "down"} · flight ${s.live.flight ? "up" : "down"}` : s.public ? UNAVAILABLE : "never started: DroneX_agents/dev.sh"} />
       </Card>
 
       <Card title="ASI:One">
@@ -101,8 +106,8 @@ export default function DispatchPanel() {
         {a ? (
           <>
             <Row tone={s.almanac ? "ok" : "warn"} label="Almanac" detail={s.almanac ? `${s.almanac.status} · ${s.almanac.type} · ${s.almanac.endpoint ?? "no endpoint"}` : "not listed yet"} />
-            <Row tone={a.model ? "ok" : "warn"} label="Intent model" detail={a.model ? `${a.model} (ASI:One)` : "no INTENT_API_KEY: the rule parser handles the demo sentences"} />
-            <Row tone={a.flight.payments ? "ok" : "warn"} label="Payment Protocol" detail={a.flight.payments ? `${a.flight.priceFet} FET per flight · ${a.flight.ledger ? "paid and verified on Dorado (testnet)" : "committed by reference, no FET moved"}` : "off (DRONEX_PAYMENTS=1)"} />
+            <Row tone={a.model ? "ok" : "warn"} label="Intent model" detail={a.model ? `${a.model} (ASI:One)` : s.public ? "the rule parser handles the demo sentences" : "no INTENT_API_KEY: the rule parser handles the demo sentences"} />
+            <Row tone={a.flight.payments ? "ok" : "warn"} label="Payment Protocol" detail={a.flight.payments ? `${a.flight.priceFet} FET per flight · ${a.flight.ledger ? "paid and verified on Dorado (testnet)" : "committed by reference, no FET moved"}` : s.public ? "off" : "off (DRONEX_PAYMENTS=1)"} />
             <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <a href="https://asi1.ai/" target="_blank" rel="noreferrer" style={{ background: C.accent, color: "#04110e", padding: "8px 14px", borderRadius: 8, fontWeight: 600, textDecoration: "none" }}>
                 Chat in ASI:One
@@ -120,12 +125,14 @@ export default function DispatchPanel() {
 
       {a ? (
         <Card title="Agents">
-          <Row tone={s.live.dispatcher ? "ok" : "bad"} label={`${a.dispatcher.name} :${a.dispatcher.port}`} detail={a.dispatcher.address} />
-          <Row tone={s.live.flight ? "ok" : "bad"} label={`Flight agent :${a.flight.port}`} detail={a.flight.address} />
+          <Row tone={s.live.dispatcher ? "ok" : "bad"} label={s.public ? a.dispatcher.name : `${a.dispatcher.name} :${a.dispatcher.port}`} detail={a.dispatcher.address} />
+          <Row tone={s.live.flight ? "ok" : "bad"} label={s.public ? "Flight agent" : `Flight agent :${a.flight.port}`} detail={a.flight.address} />
           {fleet.map(([pid, addr]) => (
             <Row key={pid} tone={s.live.fleet ? "ok" : "bad"} label={pid} detail={short(addr)} />
           ))}
-          <p style={{ color: C.dim, fontSize: 12, margin: "10px 0 0" }}>Started {new Date(a.startedAt).toLocaleString()}. Fleet agents run in one Bureau on :{a.fleet.port}; they and the flight agent talk to the dispatcher locally.</p>
+          <p style={{ color: C.dim, fontSize: 12, margin: "10px 0 0" }}>
+            Started {new Date(a.startedAt).toLocaleString()}. Fleet agents run in one Bureau{s.public ? "" : ` on :${a.fleet.port}`}; they and the flight agent talk to the dispatcher locally.
+          </p>
         </Card>
       ) : null}
 

@@ -15,6 +15,12 @@
 //! pairing and `/rpc`, without what only this computer may ask for (opening
 //! a browser or the desktop app, bootstrap tokens). Its sessions count only
 //! there, and its pages are never operators.
+//!
+//! The public listener (`--public-origin`, DEPLOY items 1 to 5) serves the
+//! same page on loopback behind the host's proxy, for anyone: no pairing,
+//! every visitor a guest that may watch and fly simulated vehicles (see
+//! `uxduck_engine::guests`). Its guests count only there; its `Host` and
+//! `Origin` are the public origin's alone.
 
 use std::sync::Arc;
 
@@ -60,6 +66,9 @@ pub struct Allowlist {
     /// Origins of other sites, such as `https://app.uxduck.com`: allowed
     /// with CORS, and with a token instead of the cookie. Their hosts are not.
     pub hosted: Vec<String>,
+    /// The public listener's origin, when there is one (DEPLOY item 4): a
+    /// session from it never counts on this computer's own listener.
+    pub public: Option<String>,
 }
 
 impl Allowlist {
@@ -84,7 +93,15 @@ impl Allowlist {
             hosts,
             origins,
             hosted: Vec::new(),
+            public: None,
         }
+    }
+
+    /// Never counts sessions of the public listener at `origin` here.
+    #[must_use]
+    pub fn refusing_public(mut self, origin: Option<&str>) -> Self {
+        self.public = origin.map(|origin| origin.trim_end_matches('/').to_owned());
+        self
     }
 
     /// Also allows these other sites, such as `HOSTED_ORIGINS`.
@@ -101,13 +118,25 @@ impl Allowlist {
         self.hosted.iter().any(|allowed| allowed == origin)
     }
 
-    /// The network listener's: its own address and port, nothing else.
+    /// The network listener's: its own address and port, nothing else. The
+    /// public listener's: the public origin's host, also with its default
+    /// port written out (DEPLOY item 5), and the public origin.
     #[must_use]
     pub fn network(origin: &Network) -> Self {
+        let mut hosts = vec![origin.host.clone()];
+        if origin.public && !origin.host.contains(':') {
+            let port = if origin.origin.starts_with("https://") {
+                443
+            } else {
+                80
+            };
+            hosts.push(format!("{}:{port}", origin.host));
+        }
         Self {
-            hosts: vec![origin.host.clone()],
+            hosts,
             origins: vec![origin.origin.clone()],
             hosted: Vec::new(),
+            public: None,
         }
     }
 }
@@ -125,6 +154,8 @@ pub struct Network {
     /// This computer's own page, such as `http://127.0.0.1:45000/`: the
     /// referrer the map keys allow, sent with relayed map requests.
     pub referrer: String,
+    /// The public listener (DEPLOY item 1): guests instead of pairing.
+    pub public: bool,
 }
 
 impl Network {
@@ -140,7 +171,35 @@ impl Network {
             host,
             stopped,
             referrer,
+            public: false,
         }
+    }
+
+    /// The public listener at `origin`, such as `https://sim.example.com`,
+    /// whatever loopback port it listens on: the proxy keeps `Host` and
+    /// `Origin` as the visitor sent them. None for anything but an
+    /// `http(s)://host[:port]` origin.
+    #[must_use]
+    pub fn public(origin: &str, stopped: tokio::sync::watch::Receiver<bool>) -> Option<Self> {
+        let origin = origin.trim_end_matches('/');
+        let host = origin
+            .strip_prefix("https://")
+            .or_else(|| origin.strip_prefix("http://"))?;
+        if host.is_empty() || host.contains(['/', '?', '#', '@']) {
+            return None;
+        }
+        Some(Self {
+            host: host.to_ascii_lowercase(),
+            origin: origin.to_owned(),
+            stopped,
+            referrer: String::new(),
+            public: true,
+        })
+    }
+
+    /// Whether its cookie must be `Secure`: a public origin on https.
+    fn secure(&self) -> bool {
+        self.public && self.origin.starts_with("https://")
     }
 }
 
@@ -243,6 +302,47 @@ pub fn network_router(
         .fallback(network_interface);
     api.layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
+}
+
+/// The public listener's router (DEPLOY item 1): the page, `/rpc` for
+/// guests minted by `GET /api/session`, and nothing else. Pairing answers
+/// 404, so no code exists there; no map relay (a page on https fetches its
+/// tiles itself); no recordings, photos or vehicle files, whose addresses
+/// come from methods guests may not call. Serve it on loopback with
+/// `ConnectInfo<SocketAddr>`, behind the proxy that sets `X-Forwarded-For`.
+pub fn public_router(
+    engine: EngineHandle,
+    network: Network,
+    interfaces: Arc<Interfaces>,
+    video: Arc<crate::video::hub::Hub>,
+    files: crate::vehicle_files::Store,
+) -> Router {
+    let state = AppState {
+        engine,
+        allow: Arc::new(Allowlist::network(&network)),
+        daemon_version: env!("CARGO_PKG_VERSION"),
+        video,
+        interfaces,
+        files,
+        dev_cli: None,
+        network: Some(network),
+    };
+    let api = Router::new()
+        .route("/api/health", get(health))
+        .route("/api/session", get(session_status))
+        .route("/api/pairing", post(not_here).get(not_here))
+        .route("/api/pairing/{id}", get(not_here).post(not_here))
+        .route("/rpc", get(rpc))
+        .route("/interface/ready", post(interface_ready))
+        .route("/interface/boot-failed", post(interface_boot_failed))
+        .fallback(network_interface);
+    api.layer(middleware::from_fn_with_state(state.clone(), guard))
+        .with_state(state)
+}
+
+/// What the public listener does not have.
+async fn not_here() -> StatusCode {
+    StatusCode::NOT_FOUND
 }
 
 /// Where a page on the network may have its map requests relayed (S97):
@@ -594,8 +694,9 @@ fn cookie_token(headers: &HeaderMap) -> Option<String> {
         .map(|(_, token)| token.to_owned())
 }
 
-fn set_cookie(token: &str) -> (header::HeaderName, HeaderValue) {
-    let value = format!("{SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/");
+fn set_cookie(token: &str, secure: bool) -> (header::HeaderName, HeaderValue) {
+    let secure = if secure { "; Secure" } else { "" };
+    let value = format!("{SESSION_COOKIE}={token}; HttpOnly; SameSite=Strict; Path=/{secure}");
     (
         header::SET_COOKIE,
         HeaderValue::from_str(&value).unwrap_or_else(|_| HeaderValue::from_static("")),
@@ -628,18 +729,39 @@ fn sent_token(headers: &HeaderMap) -> Option<String> {
 /// The browser's session and its token: its cookie on this site, or for
 /// another site the token it sent, which counts only from the origin that
 /// paired. A session paired on the network listener counts only there, and
-/// no other session counts there (S97).
+/// no other session counts there (S97). On the public listener only a
+/// guest's cookie counts, and a guest counts nowhere else (DEPLOY item 4).
 async fn current_session(
     state: &AppState,
     headers: &HeaderMap,
 ) -> Option<(String, uxduck_engine::Session)> {
+    if let Some(network) = state.network.as_ref().filter(|n| n.public) {
+        let token = cookie_token(headers)?;
+        let asked = token.clone();
+        let session = state
+            .engine
+            .run(move |e| e.guest(&asked))
+            .await
+            .ok()
+            .flatten()?;
+        return (session.origin == network.origin).then_some((token, session));
+    }
+    // Never on this computer's listener: a session of the public origin,
+    // nor, by cookie, one from any https page, which only a proxy could
+    // have brought here.
+    let public = |origin: &str| state.allow.public.as_deref() == Some(origin);
     if let Some(origin) = origin_of(headers).filter(|o| state.allow.is_hosted(o)) {
         let token = sent_token(headers)?;
         let session = state.engine.session(token.clone()).await.ok().flatten()?;
-        return (session.origin == origin).then_some((token, session));
+        return (session.origin == origin && !public(&session.origin)).then_some((token, session));
     }
     let token = cookie_token(headers)?;
     let session = state.engine.session(token.clone()).await.ok().flatten()?;
+    if state.network.is_none()
+        && (public(&session.origin) || session.origin.starts_with("https://"))
+    {
+        return None;
+    }
     let here = match &state.network {
         // And not forgotten at the computer since.
         Some(network) if session.origin == network.origin => {
@@ -656,10 +778,62 @@ async fn current_session(
     here.then_some((token, session))
 }
 
-async fn session_status(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
-    Json(
-        json!({ "paired": current_session(&state, &headers).await.is_some(), "daemonVersion": state.daemon_version }),
-    )
+async fn session_status(State(state): State<AppState>, request: Request) -> Response {
+    let peer = visitor(&request);
+    let headers = request.headers().clone();
+    let paired = current_session(&state, &headers).await.is_some();
+    match &state.network {
+        Some(network) if network.public && !paired => mint_guest(&state, network, peer).await,
+        _ => {
+            Json(json!({ "paired": paired, "daemonVersion": state.daemon_version })).into_response()
+        }
+    }
+}
+
+/// Where a request to the public listener came from: the first
+/// `X-Forwarded-For` entry, which the proxy (the only way in) sets, else
+/// the socket's address.
+fn visitor(request: &Request) -> Option<String> {
+    let forwarded = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned);
+    forwarded.or_else(|| {
+        request
+            .extensions()
+            .get::<ConnectInfo<std::net::SocketAddr>>()
+            .map(|ConnectInfo(address)| address.ip().to_string())
+    })
+}
+
+/// A visitor of the public listener without a guest yet gets one, so the
+/// page skips pairing (DEPLOY item 1); or 503 once the simulator is full.
+async fn mint_guest(state: &AppState, network: &Network, peer: Option<String>) -> Response {
+    let Some(peer) = peer else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let origin = network.origin.clone();
+    match state
+        .engine
+        .run(move |e| e.mint_guest(&origin, &peer))
+        .await
+    {
+        Ok(Some(token)) => (
+            [set_cookie(&token, network.secure())],
+            Json(json!({ "paired": true, "daemonVersion": state.daemon_version })),
+        )
+            .into_response(),
+        Ok(None) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Simulator is full. Try again in a few minutes.",
+        )
+            .into_response(),
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -670,9 +844,11 @@ struct Bootstrap {
 /// Exchanges a one-time bootstrap token (from `uxduck open`) for a session.
 async fn session_bootstrap(State(state): State<AppState>, Json(body): Json<Bootstrap>) -> Response {
     match state.engine.exchange_bootstrap(body.bootstrap).await {
-        Ok(Some(session)) => {
-            ([set_cookie(&session)], Json(json!({ "paired": true }))).into_response()
-        }
+        Ok(Some(session)) => (
+            [set_cookie(&session, false)],
+            Json(json!({ "paired": true })),
+        )
+            .into_response(),
         Ok(None) => (StatusCode::FORBIDDEN, Json(json!({ "paired": false }))).into_response(),
         Err(_) => StatusCode::SERVICE_UNAVAILABLE.into_response(),
     }
@@ -746,9 +922,11 @@ async fn pairing_poll(
         {
             Json(json!({ "state": "approved", "token": session })).into_response()
         }
-        Ok(PairingState::Approved { session, .. }) => {
-            ([set_cookie(&session)], Json(json!({ "state": "approved" }))).into_response()
-        }
+        Ok(PairingState::Approved { session, .. }) => (
+            [set_cookie(&session, false)],
+            Json(json!({ "state": "approved" })),
+        )
+            .into_response(),
         Ok(PairingState::Denied) => Json(json!({ "state": "denied" })).into_response(),
         Ok(PairingState::Unknown) => {
             (StatusCode::NOT_FOUND, Json(json!({ "state": "unknown" }))).into_response()
@@ -759,6 +937,12 @@ async fn pairing_poll(
 
 /// The largest JSON-RPC message from a paired page.
 const RPC_MESSAGE: usize = 48 * 1024 * 1024;
+/// The largest from a guest of the public listener (DEPLOY item 1). What
+/// needs `RPC_MESSAGE` is a feedback report with its attachments, which a
+/// guest may not send; its largest is a mission upload, and 1 MiB holds
+/// thousands of items, more than an autopilot keeps. The proxy does not
+/// limit WebSocket frames, so this is the only bound.
+const PUBLIC_RPC_MESSAGE: usize = 1024 * 1024;
 
 /// JSON-RPC over WebSocket, one text frame per message. Needs a session.
 async fn rpc(
@@ -770,7 +954,17 @@ async fn rpc(
         return (StatusCode::UNAUTHORIZED, "pair this browser first").into_response();
     };
     let engine = state.engine.clone();
+    let public = state.network.as_ref().is_some_and(|n| n.public);
     let (trust, stopped) = match &state.network {
+        // A guest goes by its own client id: the gate keys on it (DEPLOY
+        // items 2 and 3).
+        Some(network) if network.public => (
+            Trust::NetworkBrowser {
+                origin: session.origin,
+                client: uxduck_engine::pairing::guest_client(&token),
+            },
+            Some(network.stopped.clone()),
+        ),
         Some(network) => (
             Trust::NetworkBrowser {
                 origin: session.origin,
@@ -788,10 +982,15 @@ async fn rpc(
     // A browser that offered subprotocols closes unless one is echoed. A
     // browser sends a message as one frame, and a feedback report with its
     // screenshot and 25 MB of attached files is about 38 MB in base64.
+    let largest = if public {
+        PUBLIC_RPC_MESSAGE
+    } else {
+        RPC_MESSAGE
+    };
     upgrade
         .protocols([PROTOCOL])
-        .max_frame_size(RPC_MESSAGE)
-        .max_message_size(RPC_MESSAGE)
+        .max_frame_size(largest)
+        .max_message_size(largest)
         .on_upgrade(move |socket| serve_websocket(socket, engine, trust, stopped))
 }
 
@@ -992,4 +1191,272 @@ async fn interface_boot_failed(
     report: Json<crate::interface::PageReport>,
 ) -> StatusCode {
     crate::interface::boot_failed(State(state.interfaces), report)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, reason = "tests")]
+
+    use super::*;
+
+    const ORIGIN: &str = "https://sim.example.com";
+
+    fn engine() -> EngineHandle {
+        engine_with(uxduck_engine::Loaded::default())
+    }
+
+    fn engine_with(loaded: uxduck_engine::Loaded) -> EngineHandle {
+        use crate::adapters::system::{OsRandom, SystemClock};
+        use uxduck_engine::runtime::{
+            Forget, MemoryCredentials, NoAgent, NoLinks, NoPlugins, NoSystem, Ports,
+        };
+        use uxduck_engine::{Engine, EngineConfig, HostAbout};
+        EngineHandle::spawn(Engine::new(
+            EngineConfig {
+                daemon_version: env!("CARGO_PKG_VERSION").into(),
+                capabilities: uxduck_contracts::dto::initialize::DaemonCapabilities::default(),
+                ui_url: "http://127.0.0.1:45000/".into(),
+                checkpoint_every: 1000,
+                models: vec![],
+                agent_provider: "fake".into(),
+                about: HostAbout::default(),
+            },
+            Box::new(SystemClock),
+            Box::new(OsRandom),
+            Ports {
+                persistence: Box::new(Forget),
+                agent: Box::new(NoAgent),
+                credentials: Box::new(MemoryCredentials::default()),
+                links: Box::new(NoLinks),
+                system: Box::new(NoSystem::default()),
+                plugins: Box::new(NoPlugins),
+            },
+            loaded,
+        ))
+    }
+
+    /// The public router on a free loopback port, as the daemon serves it.
+    async fn serve_public(dir: &std::path::Path, engine: EngineHandle) -> std::net::SocketAddr {
+        let (stop, stopped) = tokio::sync::watch::channel(false);
+        std::mem::forget(stop);
+        let interfaces = Arc::new(
+            Interfaces::open(dir, None, crate::interface::Config::from_env(None)).unwrap(),
+        );
+        let app = public_router(
+            engine,
+            Network::public(ORIGIN, stopped).unwrap(),
+            interfaces,
+            Arc::new(crate::video::hub::Hub::new(dir.join("media"))),
+            crate::vehicle_files::Store::new(dir),
+        );
+        let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = tcp.local_addr().unwrap();
+        tokio::spawn(async move {
+            let service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+            axum::serve(tcp, service).await.unwrap();
+        });
+        address
+    }
+
+    #[test]
+    fn the_public_allowlist_is_the_public_origin_alone() {
+        let (_stop, stopped) = tokio::sync::watch::channel(false);
+        let allow =
+            Allowlist::network(&Network::public("https://sim.example.com/", stopped).unwrap());
+        assert_eq!(allow.hosts, ["sim.example.com", "sim.example.com:443"]);
+        assert_eq!(allow.origins, ["https://sim.example.com"]);
+        let (_stop, stopped) = tokio::sync::watch::channel(false);
+        assert!(Network::public("sim.example.com", stopped).is_none());
+    }
+
+    #[tokio::test]
+    async fn guests_of_the_public_router_fly_without_pairing() {
+        use tokio_tungstenite::tungstenite::Message as Frame;
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine();
+        let address = serve_public(dir.path(), engine.clone()).await;
+        let base = format!("http://{address}");
+        let client = reqwest::Client::new();
+
+        // Another host is refused, however it is asked.
+        let wrong = client
+            .get(format!("{base}/api/session"))
+            .header(header::HOST, "127.0.0.1")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(wrong.status(), StatusCode::FORBIDDEN);
+
+        // The first look mints a guest: paired, with a Secure cookie.
+        let first = client
+            .get(format!("{base}/api/session"))
+            .header(header::HOST, "sim.example.com")
+            .header("x-forwarded-for", "203.0.113.7, 10.0.0.1")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(first.status(), StatusCode::OK);
+        let cookie = first
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        assert!(cookie.contains("; Secure"), "{cookie}");
+        assert!(cookie.contains("HttpOnly"), "{cookie}");
+        let body: serde_json::Value = first.json().await.unwrap();
+        assert_eq!(body["paired"], true);
+        let token = cookie
+            .split(';')
+            .next()
+            .unwrap()
+            .trim()
+            .strip_prefix("uxduck_session=")
+            .unwrap()
+            .to_owned();
+
+        // Its cookie counts again, without a new guest.
+        let again = client
+            .get(format!("{base}/api/session"))
+            .header(header::HOST, "sim.example.com")
+            .header(header::COOKIE, format!("uxduck_session={token}"))
+            .send()
+            .await
+            .unwrap();
+        assert!(again.headers().get(header::SET_COOKIE).is_none());
+        assert_eq!(engine.run(|e| e.guest_count()).await.unwrap(), 1);
+
+        // No pairing here.
+        let pairing = client
+            .post(format!("{base}/api/pairing"))
+            .header(header::HOST, "sim.example.com")
+            .header(header::ORIGIN, ORIGIN)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(pairing.status(), StatusCode::NOT_FOUND);
+
+        // And `/rpc` takes the guest, as its own `clguest` client.
+        let mut request = format!("ws://{address}/rpc").into_client_request().unwrap();
+        let headers = request.headers_mut();
+        headers.insert(header::HOST, HeaderValue::from_static("sim.example.com"));
+        headers.insert(header::ORIGIN, HeaderValue::from_static(ORIGIN));
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_str(&format!("uxduck_session={token}")).unwrap(),
+        );
+        let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+        let initialize = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {
+                "clientInfo": { "name": "visitor", "kind": "operator-ui", "version": env!("CARGO_PKG_VERSION") },
+                "capabilities": { "protocolVersion": uxduck_contracts::version::PROTOCOL_VERSION }
+            }
+        });
+        socket
+            .send(Frame::Text(initialize.to_string().into()))
+            .await
+            .unwrap();
+        let reply = loop {
+            let Some(Ok(Frame::Text(text))) = socket.next().await else {
+                panic!("the socket closed");
+            };
+            let reply: serde_json::Value = serde_json::from_str(&text).unwrap();
+            if reply["id"] == 1 {
+                break reply;
+            }
+        };
+        assert_eq!(
+            reply["result"]["granted"],
+            json!(["read", "control"]),
+            "{reply}"
+        );
+        let connected = engine.run(|e| e.network().connected).await.unwrap();
+        assert_eq!(connected, [uxduck_engine::pairing::guest_client(&token)]);
+        assert!(connected[0].starts_with("clguest"));
+
+        // A guest's cookie does not count on a paired listener's lookup.
+        let asked = token.clone();
+        assert!(engine.session(asked).await.unwrap().is_none());
+    }
+
+    /// DEPLOY item 4: this computer's own listener never takes a session
+    /// of the public origin, nor by cookie one from an https page; its own
+    /// sessions still count.
+    #[tokio::test]
+    async fn the_loopback_listener_refuses_public_and_https_sessions() {
+        use futures::channel::mpsc::unbounded;
+        let public = "http://sim.test:8080";
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine();
+        // A session for each origin, paired as an operator would allow.
+        let mut tokens = Vec::new();
+        for origin in ["https://elsewhere.example", public] {
+            let (id, code) = engine
+                .request_pairing(origin.to_owned(), None)
+                .await
+                .unwrap();
+            engine
+                .run(move |e| {
+                    let (outbox, _gone) = unbounded();
+                    let c = e.connect(
+                        uxduck_contracts::dto::trace::Transport::Socket,
+                        Trust::LocalUser,
+                        outbox,
+                    );
+                    e.receive(c, &json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                        "clientInfo": { "name": "cli", "kind": "operator-cli", "version": env!("CARGO_PKG_VERSION") },
+                        "capabilities": { "protocolVersion": uxduck_contracts::version::PROTOCOL_VERSION } } }).to_string());
+                    e.receive(c, &json!({ "jsonrpc": "2.0", "id": 2, "method": "pairing/approve",
+                        "params": { "code": code } }).to_string());
+                    e.disconnect(c);
+                })
+                .await
+                .unwrap();
+            let PairingState::Approved { session, .. } = engine.poll_pairing(id).await.unwrap()
+            else {
+                panic!("pairing {origin} was not approved");
+            };
+            tokens.push(session);
+        }
+        let bootstrap = engine.create_bootstrap().await.unwrap();
+        let own = engine.exchange_bootstrap(bootstrap).await.unwrap().unwrap();
+
+        let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = tcp.local_addr().unwrap();
+        let interfaces = Arc::new(
+            Interfaces::open(dir.path(), None, crate::interface::Config::from_env(None)).unwrap(),
+        );
+        let app = router(
+            engine,
+            Allowlist::new(address.port(), &[]).refusing_public(Some(public)),
+            interfaces,
+            Arc::new(crate::video::hub::Hub::new(dir.path().join("media"))),
+            crate::vehicle_files::Store::new(dir.path()),
+            None,
+        );
+        tokio::spawn(async move { axum::serve(tcp, app).await.unwrap() });
+        let paired = async |token: &str| -> bool {
+            let answer: serde_json::Value = reqwest::Client::new()
+                .get(format!("http://{address}/api/session"))
+                .header(header::COOKIE, format!("uxduck_session={token}"))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            answer["paired"] == true
+        };
+        assert!(!paired(&tokens[0]).await, "an https session counted");
+        assert!(
+            !paired(&tokens[1]).await,
+            "the public origin's session counted"
+        );
+        assert!(
+            paired(&own).await,
+            "this computer's own session did not count"
+        );
+    }
 }

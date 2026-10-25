@@ -3,13 +3,17 @@
 GET  /api/catalog               every hangar drone judged: summary, readiness, mission matrix, sim profile
 POST /api/verdict               a build (or preset + swaps) judged the same way
 GET  /api/sim/designs           designs already packed and sent to the simulator (what the flight agent can fly)
-POST /api/sim/refly/<id>        start a stored design as a new simulated vehicle
+POST /api/sim/refly/<id>        start a stored design as a new simulated vehicle (503 when the simulator is full)
+POST /api/sim/stop/<vehicleId>  stop a vehicle the agents started (agent-only)
 GET  /api/sim/vehicles/<id>      a vehicle's state and telemetry, with `ready` (GPS fix, EKF good)
 POST /api/sim/vehicles/<id>      one copilot tool run directly (takeoff, goto_place, return_to_launch...), no model
-POST /api/copilot/intent        a sentence → a Core RPC tool call → receipt (take off, go to, mode, status...)
+POST /api/copilot/intent        a sentence → a Core RPC tool call → receipt; `lockVehicle` keeps it on one vehicle
 GET  /api/airspace              the shared airspace (SpacetimeDB track); optional, degrades when absent
 POST /api/airspace/corridor     a corridor from the airspace's reducer: granted, or refused (409) with the reason
 POST /api/airspace/mission      record which agent gave which vehicle which mission, and its status
+
+Every request carries `x-dronex-agent: <DRONEX_AGENT_TOKEN>` when a token is configured, so the configurator can
+tell the agents from the public.
 
 Every number returned is the configurator's own: a dataset field or dronePhysics.js over dataset fields.
 """
@@ -21,9 +25,15 @@ from typing import Any
 
 import httpx
 
+AGENT_HEADER = "x-dronex-agent"
+
 
 class RenderApiError(RuntimeError):
     pass
+
+
+class SimulatorFull(RenderApiError):
+    """/api/sim/refly answered 503: no room for another vehicle right now. Say so; never retry in a loop."""
 
 
 @dataclass
@@ -252,9 +262,10 @@ class VehicleState:
 class RenderApi:
     """Async client. Pass `transport` in tests (httpx.MockTransport) so nothing touches the network."""
 
-    def __init__(self, base_url: str, timeout: float = 30.0, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, base_url: str, timeout: float = 30.0, transport: httpx.AsyncBaseTransport | None = None, token: str = ""):
         self.base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout, transport=transport)
+        headers = {AGENT_HEADER: token} if token else None
+        self._client = httpx.AsyncClient(base_url=self.base_url, timeout=timeout, transport=transport, headers=headers)
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -271,6 +282,9 @@ class RenderApi:
         except ValueError as e:
             raise RenderApiError(f"{method} {path}: not JSON (HTTP {r.status_code})") from e
         if r.status_code >= 400:
+            if r.status_code == 503 and path.startswith("/api/sim/refly/"):
+                err = body.get("error") if isinstance(body, dict) else None
+                raise SimulatorFull(str(err or "simulator full, try again in a few minutes"))
             raise RenderApiError(f"{method} {path}: HTTP {r.status_code}: {body.get('error', body) if isinstance(body, dict) else body}")
         return body
 
@@ -302,8 +316,18 @@ class RenderApi:
         d = await self._json("POST", f"/api/sim/refly/{design_id}", timeout=120.0)
         return FlyResult(design_id=str(d.get("id", design_id)), name=str(d.get("name", "")), vehicle_id=str(d["vehicleId"]), link_id=str(d.get("linkId", "")), url=str(d.get("url", "")))
 
-    async def intent(self, text: str, vehicle_id: str | None = None) -> IntentResult:
-        d = await self._json("POST", "/api/copilot/intent", json={"text": text, "vehicleId": vehicle_id}, timeout=90.0)
+    async def stop(self, vehicle_id: str) -> None:
+        """Stop a vehicle the agents started (agent-only route)."""
+        await self._json("POST", f"/api/sim/stop/{vehicle_id}", timeout=60.0)
+
+    async def intent(self, text: str, vehicle_id: str | None = None, lock: bool = False) -> IntentResult:
+        """With `lock`, the copilot commands only `vehicle_id` (lockVehicle), whatever vehicle the sentence names."""
+        body: dict[str, Any] = {"text": text, "vehicleId": vehicle_id}
+        if lock:
+            if not vehicle_id:
+                raise RenderApiError("there is no vehicle of yours in the air to command")
+            body["lockVehicle"] = vehicle_id
+        d = await self._json("POST", "/api/copilot/intent", json=body, timeout=90.0)
         return IntentResult(reply=str(d.get("reply", "")), actions=list(d.get("actions", [])), vehicle_id=d.get("vehicleId"))
 
     async def vehicle(self, vehicle_id: str, place: str | None = None) -> VehicleState:

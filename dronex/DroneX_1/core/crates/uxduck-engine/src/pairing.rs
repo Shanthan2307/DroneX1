@@ -3,6 +3,10 @@
 //! authentication). Sessions survive restarts through the `Persistence` port,
 //! stored by the SHA-256 of their token; bootstrap tokens and pairing
 //! requests are short-lived and stay in memory.
+//!
+//! Guests of the public listener (`--public-origin`, DEPLOY items 1 and 2)
+//! are sessions nobody approved: minted on the page's first look, capped,
+//! expiring, and never saved, so a restart forgets every visitor.
 
 use std::collections::HashMap;
 
@@ -25,6 +29,19 @@ const ABANDONED_US: u64 = 15 * 1_000_000;
 /// Phones and tablets on the network waiting at once (S97): anyone there
 /// can open the page, so they cannot pile questions on the operator.
 const NETWORK_WAITING: usize = 4;
+/// Guests at once on the public listener: each may fly, so each costs the
+/// host telemetry fan-out and a socket; past this the page says it is full.
+pub const MAX_GUESTS: usize = 100;
+/// Guests from one address at once: a few tabs, not a room's worth.
+pub const MAX_GUESTS_PER_PEER: usize = 3;
+/// A guest with no page open this long has gone.
+pub const GUEST_IDLE_US: u64 = 60 * 60 * 1_000_000;
+/// No guest lasts longer than this, open page or not: it gets a new one.
+pub const GUEST_MAX_US: u64 = 12 * 60 * 60 * 1_000_000;
+/// A guest whose page never opened `/rpc` this long after it last asked
+/// was not a page: minting guests without using them cannot hold the
+/// listener full for `GUEST_IDLE_US`.
+pub const GUEST_UNCONNECTED_US: u64 = 2 * 60 * 1_000_000;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
@@ -103,6 +120,38 @@ fn client_of_hash(hash: &str) -> String {
     format!("clnet{}", &hash[..16.min(hash.len())])
 }
 
+/// The client id of a guest of the public listener: never a record in
+/// `state.clients`, only this name on its connections.
+#[must_use]
+pub fn guest_client(token: &str) -> String {
+    guest_of_hash(&token_hash(token))
+}
+
+const GUEST_PREFIX: &str = "clguest";
+
+fn guest_of_hash(hash: &str) -> String {
+    format!("{GUEST_PREFIX}{}", &hash[..16.min(hash.len())])
+}
+
+/// Whether a client id is a guest's: what the RPC gate (DEPLOY item 3) keys on.
+#[must_use]
+pub fn is_guest_client(client: &str) -> bool {
+    client.starts_with(GUEST_PREFIX)
+}
+
+/// A visitor of the public listener, by token hash: in memory only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Guest {
+    pub origin: String,
+    pub created_us: u64,
+    /// Its page last asked, or had a socket open (`expire_guests`).
+    pub seen_us: u64,
+    /// Its address, as the proxy saw it: what the per-address cap counts.
+    pub peer: String,
+    /// It has opened `/rpc` at least once.
+    pub connected: bool,
+}
+
 /// Whether a session's origin is a page on the network listener (S97): an
 /// IPv4 address that is not this computer's loopback.
 #[must_use]
@@ -156,6 +205,9 @@ pub struct Sessions {
     pairing: HashMap<String, Pending>,
     /// By token hash.
     active: HashMap<String, Session>,
+    /// Guests of the public listener, by token hash. Never persisted, and
+    /// never returned by `session()`: they count only on that listener.
+    guests: HashMap<String, Guest>,
 }
 
 impl Sessions {
@@ -406,6 +458,107 @@ impl Sessions {
         }
     }
 
+    /// A new guest of the public listener at `origin`, from `peer`. None
+    /// when the listener is full or that address has enough guests already.
+    /// Nothing is saved: the `Persistence` port never sees a guest.
+    pub fn mint_guest(
+        &mut self,
+        origin: &str,
+        peer: &str,
+        clock: &dyn Clock,
+        random: &mut dyn Random,
+    ) -> Option<String> {
+        self.expire_guests(clock, |_| false);
+        let from_peer = self.guests.values().filter(|g| g.peer == peer).count();
+        if self.guests.len() >= MAX_GUESTS || from_peer >= MAX_GUESTS_PER_PEER {
+            return None;
+        }
+        let token = random.token();
+        let now = clock.now_us();
+        self.guests.insert(
+            token_hash(&token),
+            Guest {
+                origin: origin.to_owned(),
+                created_us: now,
+                seen_us: now,
+                peer: peer.to_owned(),
+                connected: false,
+            },
+        );
+        Some(token)
+    }
+
+    /// A guest's session, if it has not expired; it counts as seen now.
+    pub fn guest(&mut self, token: &str, clock: &dyn Clock) -> Option<Session> {
+        let now = clock.now_us();
+        let guest = self.guests.get_mut(&token_hash(token))?;
+        if guest_expired(guest, now) {
+            return None;
+        }
+        guest.seen_us = now;
+        Some(Session {
+            origin: guest.origin.clone(),
+        })
+    }
+
+    /// A guest's page opened `/rpc`: from now on only `GUEST_IDLE_US`
+    /// ends it for being idle. False when it is not here.
+    pub fn guest_connected(&mut self, client: &str, clock: &dyn Clock) -> bool {
+        let now = clock.now_us();
+        let Some(guest) = self
+            .guests
+            .iter_mut()
+            .find(|(hash, _)| guest_of_hash(hash) == client)
+            .map(|(_, guest)| guest)
+        else {
+            return false;
+        };
+        if guest_expired(guest, now) {
+            return false;
+        }
+        guest.connected = true;
+        guest.seen_us = now;
+        true
+    }
+
+    /// Whether `client` is a guest that is still here.
+    #[must_use]
+    pub fn has_guest_client(&self, client: &str) -> bool {
+        self.guests.keys().any(|hash| guest_of_hash(hash) == client)
+    }
+
+    /// How many guests there are now.
+    #[must_use]
+    pub fn guest_count(&self) -> usize {
+        self.guests.len()
+    }
+
+    /// Drops guests idle for `GUEST_IDLE_US` or older than `GUEST_MAX_US`,
+    /// and returns their client ids, so their sockets can be closed. A guest
+    /// `connected` says has a socket open counts as seen first.
+    pub fn expire_guests(
+        &mut self,
+        clock: &dyn Clock,
+        connected: impl Fn(&str) -> bool,
+    ) -> Vec<String> {
+        let now = clock.now_us();
+        let mut gone = Vec::new();
+        self.guests.retain(|hash, guest| {
+            let client = guest_of_hash(hash);
+            if connected(&client) {
+                guest.connected = true;
+                guest.seen_us = now;
+            }
+            let keep = !guest_expired(guest, now);
+            if !keep {
+                gone.push(client);
+            }
+            keep
+        });
+        gone.sort();
+        gone
+    }
+
     fn create_session(
         &mut self,
         origin: String,
@@ -430,6 +583,15 @@ impl Sessions {
         self.bootstrap
             .retain(|_, (_, created)| now.saturating_sub(*created) <= BOOTSTRAP_TTL_US);
     }
+}
+
+fn guest_expired(guest: &Guest, now: u64) -> bool {
+    let idle = if guest.connected {
+        GUEST_IDLE_US
+    } else {
+        GUEST_UNCONNECTED_US
+    };
+    now.saturating_sub(guest.seen_us) > idle || now.saturating_sub(guest.created_us) > GUEST_MAX_US
 }
 
 /// What a pairing question is bound to, resolved once it is answered.
@@ -496,5 +658,155 @@ pub(crate) fn question(asked: &Question) -> Raise {
         actions: vec![answer("Allow", true, None), answer("Deny", false, None)],
         condition: Some(condition(code)),
         report: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct At(u64);
+    impl Clock for At {
+        fn now_us(&self) -> u64 {
+            self.0
+        }
+    }
+
+    /// Distinct tokens, one after another.
+    struct Counting(u8);
+    impl Random for Counting {
+        fn fill(&mut self, bytes: &mut [u8]) {
+            self.0 = self.0.wrapping_add(1);
+            bytes.fill(self.0);
+        }
+    }
+
+    /// Records what would be saved.
+    #[derive(Default)]
+    struct Saved(Vec<String>);
+    impl Persistence for Saved {
+        fn append(&mut self, _: &uxduck_core::events::Event) {}
+        fn checkpoint(&mut self, _: &crate::state::State) {}
+        fn save_session(&mut self, hash: &str, _: &Session) {
+            self.0.push(hash.to_owned());
+        }
+    }
+
+    const ORIGIN: &str = "https://sim.example.com";
+
+    #[test]
+    fn guests_are_capped_per_address_and_in_all() {
+        let (clock, mut random) = (At(1), Counting(0));
+        let mut sessions = Sessions::default();
+        for _ in 0..MAX_GUESTS_PER_PEER {
+            assert!(
+                sessions
+                    .mint_guest(ORIGIN, "203.0.113.9", &clock, &mut random)
+                    .is_some()
+            );
+        }
+        assert!(
+            sessions
+                .mint_guest(ORIGIN, "203.0.113.9", &clock, &mut random)
+                .is_none()
+        );
+        let mut peers = 0;
+        while sessions.guest_count() < MAX_GUESTS {
+            peers += 1;
+            let peer = format!("198.51.100.{peers}");
+            assert!(
+                sessions
+                    .mint_guest(ORIGIN, &peer, &clock, &mut random)
+                    .is_some()
+            );
+        }
+        assert!(
+            sessions
+                .mint_guest(ORIGIN, "192.0.2.1", &clock, &mut random)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn guests_expire_when_idle_and_at_their_maximum_age() {
+        let mut clock = At(1_000);
+        let mut random = Counting(0);
+        let mut sessions = Sessions::default();
+        let idle = sessions
+            .mint_guest(ORIGIN, "a", &clock, &mut random)
+            .unwrap();
+        let busy = sessions
+            .mint_guest(ORIGIN, "b", &clock, &mut random)
+            .unwrap();
+        let open = sessions
+            .mint_guest(ORIGIN, "c", &clock, &mut random)
+            .unwrap();
+        assert!(sessions.guest_connected(&guest_client(&idle), &clock));
+        assert!(sessions.guest_connected(&guest_client(&busy), &clock));
+        clock.0 += GUEST_IDLE_US / 2;
+        assert!(sessions.guest(&busy, &clock).is_some());
+        clock.0 += GUEST_IDLE_US / 2 + 1;
+        let open_client = guest_client(&open);
+        let gone = sessions.expire_guests(&clock, |client| client == open_client);
+        assert_eq!(gone, vec![guest_client(&idle)]);
+        assert!(sessions.guest(&idle, &clock).is_none());
+        assert!(sessions.guest(&busy, &clock).is_some());
+        // A page kept open still ends at the maximum age.
+        clock.0 = 1_000 + GUEST_MAX_US + 1;
+        let gone = sessions.expire_guests(&clock, |_| true);
+        let mut both = vec![guest_client(&busy), open_client];
+        both.sort();
+        assert_eq!(gone, both);
+        assert_eq!(sessions.guest_count(), 0);
+    }
+
+    #[test]
+    fn a_guest_that_never_connects_goes_soon() {
+        let mut clock = At(1_000);
+        let mut random = Counting(0);
+        let mut sessions = Sessions::default();
+        let unused = sessions
+            .mint_guest(ORIGIN, "a", &clock, &mut random)
+            .unwrap();
+        let used = sessions
+            .mint_guest(ORIGIN, "a", &clock, &mut random)
+            .unwrap();
+        assert!(sessions.guest_connected(&guest_client(&used), &clock));
+        clock.0 += GUEST_UNCONNECTED_US + 1;
+        let gone = sessions.expire_guests(&clock, |_| false);
+        assert_eq!(gone, vec![guest_client(&unused)]);
+        assert!(sessions.guest(&unused, &clock).is_none());
+        assert!(!sessions.guest_connected(&guest_client(&unused), &clock));
+        assert!(sessions.guest(&used, &clock).is_some());
+        // Its address may mint again at once.
+        assert_eq!(sessions.guest_count(), 1);
+    }
+
+    #[test]
+    fn guests_are_never_saved_nor_sessions_elsewhere() {
+        let (clock, mut random) = (At(1), Counting(0));
+        let mut store = Saved::default();
+        let mut sessions = Sessions::default();
+        let token = sessions
+            .mint_guest(ORIGIN, "a", &clock, &mut random)
+            .unwrap();
+        assert!(sessions.session(&token).is_none());
+        assert!(!sessions.has_sessions());
+        assert!(sessions.has_guest_client(&guest_client(&token)));
+        assert!(is_guest_client(&guest_client(&token)));
+        assert!(!is_guest_client(&network_client(&token)));
+        assert_eq!(
+            sessions.guest(&token, &clock),
+            Some(Session {
+                origin: ORIGIN.into()
+            })
+        );
+        // A paired browser is saved; the guest never was.
+        let bootstrap = sessions.create_bootstrap("http://127.0.0.1:45000", &clock, &mut random);
+        let paired = sessions
+            .exchange_bootstrap(&bootstrap, &clock, &mut random, &mut store)
+            .unwrap();
+        assert_eq!(store.0, vec![token_hash(&paired)]);
+        assert!(sessions.guest(&paired, &clock).is_none());
     }
 }

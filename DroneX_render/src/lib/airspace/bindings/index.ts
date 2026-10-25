@@ -34,9 +34,12 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddWriterReducer from "./add_writer_reducer";
 import AssignMissionReducer from "./assign_mission_reducer";
+import KeepaliveReducer from "./keepalive_reducer";
 import RecordIncidentReducer from "./record_incident_reducer";
 import ReleaseCorridorReducer from "./release_corridor_reducer";
+import RemoveWriterReducer from "./remove_writer_reducer";
 import ReportPositionReducer from "./report_position_reducer";
 import RequestCorridorReducer from "./request_corridor_reducer";
 import UpsertVehicleReducer from "./upsert_vehicle_reducer";
@@ -126,9 +129,12 @@ const tablesSchema = __schema({
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("add_writer", AddWriterReducer),
   __reducerSchema("assign_mission", AssignMissionReducer),
+  __reducerSchema("keepalive", KeepaliveReducer),
   __reducerSchema("record_incident", RecordIncidentReducer),
   __reducerSchema("release_corridor", ReleaseCorridorReducer),
+  __reducerSchema("remove_writer", RemoveWriterReducer),
   __reducerSchema("report_position", ReportPositionReducer),
   __reducerSchema("request_corridor", RequestCorridorReducer),
   __reducerSchema("upsert_vehicle", UpsertVehicleReducer),

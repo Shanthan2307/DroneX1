@@ -41,11 +41,10 @@ export async function elasticSink(): Promise<Sink | null> {
     inFlight = true;
     const batch = queue.splice(0, 2000);
     try {
-      const body = batch.flatMap((op) => [op.id ? { index: { _index: op.index, _id: op.id } } : { index: { _index: op.index } }, op.doc]);
-      const r = await client.bulk({ operations: body, refresh: false });
+      const r = await client.bulk({ operations: bulkBody(batch), refresh: false });
       if (r.errors) {
-        const bad = r.items.filter((i) => i.index?.error);
-        console.error(`[elastic] ${bad.length} of ${batch.length} documents rejected: ${JSON.stringify(bad[0]?.index?.error).slice(0, 300)}`);
+        const bad = r.items.map((i) => i.index?.error ?? i.create?.error).filter((e) => e);
+        console.error(`[elastic] ${bad.length} of ${batch.length} documents rejected: ${JSON.stringify(bad[0]).slice(0, 300)}`);
       }
       failures = 0;
     } catch (e) {
@@ -126,7 +125,11 @@ export async function elasticSink(): Promise<Sink | null> {
   };
 }
 
-/** For tests and the CLI: the bulk body shape this sink sends. */
-export const bulkBody = (ops: Op[]): unknown[] => ops.flatMap((op) => [op.id ? { index: { _index: op.index, _id: op.id } } : { index: { _index: op.index } }, op.doc]);
+/**
+ * The bulk body this sink sends. Documents with an id (vehicles, flights, scores) are indexed (upserted); documents
+ * without one (telemetry, events) are created, which is what data streams require (setup.ts makes those two data
+ * streams with a retention lifecycle) and works the same on a plain index.
+ */
+export const bulkBody = (ops: Op[]): object[] => ops.flatMap((op) => [op.id ? { index: { _index: op.index, _id: op.id } } : { create: { _index: op.index } }, op.doc]);
 
 export type { Client };

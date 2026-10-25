@@ -4,6 +4,7 @@
 import { readFile } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import path from "node:path";
+import { simulatorUrl } from "../publicUrls";
 
 export interface DaemonInfo {
   pid: number;
@@ -24,15 +25,20 @@ export async function readDaemon(dir = coreDataDir()): Promise<DaemonInfo> {
   try {
     text = await readFile(file, "utf8");
   } catch {
-    throw new Error(`The simulation engine is not running: no ${file}. Start it with ./dev.sh at the project root.`);
+    // The path stays in the server log; visitors get the plain sentence.
+    console.error(`[dronex sim] no ${file}: start the engine with ./dev.sh at the project root`);
+    throw new Error("The simulation engine is not running.");
   }
   const info = JSON.parse(text) as Partial<DaemonInfo>;
-  if (typeof info.socket !== "string" || typeof info.port !== "number") throw new Error(`${file} is not a daemon.json`);
+  if (typeof info.socket !== "string" || typeof info.port !== "number") {
+    console.error(`[dronex sim] ${file} is not a daemon.json`);
+    throw new Error("The simulation engine is not running.");
+  }
   return { pid: info.pid ?? 0, version: info.version ?? "", port: info.port, socket: info.socket, uiUrl: info.uiUrl };
 }
 
-/** Where the simulation UI is: the daemon's own answer, else its loopback port. */
-export const uiUrlOf = (d: DaemonInfo): string => (d.uiUrl ?? `http://127.0.0.1:${d.port}/`).replace(/\/+$/, "") + "/";
+/** Where the simulation UI is: DRONEX_SIM_UI_URL when deployed, else the daemon's own answer, else its loopback port. */
+export const uiUrlOf = (d: DaemonInfo): string => simulatorUrl(d.uiUrl ?? `http://127.0.0.1:${d.port}`);
 
 interface RpcError {
   code: number;
@@ -48,6 +54,9 @@ export class CoreRpcError extends Error {
     super(`${method}: ${rpc.message}`);
   }
 }
+
+const CALL_TIMEOUT_MS = 15_000;
+const CONNECT_TIMEOUT_MS = 5_000;
 
 type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; method: string };
 
@@ -73,8 +82,15 @@ export class CoreClient {
   static async connect(socketPath: string): Promise<CoreClient> {
     const socket = await new Promise<Socket>((resolve, reject) => {
       const s = createConnection(socketPath);
-      s.once("connect", () => resolve(s));
-      s.once("error", (e) => reject(new Error(`cannot reach the simulation engine at ${socketPath}: ${e.message}`)));
+      s.once("connect", () => {
+        s.setTimeout(0);
+        resolve(s);
+      });
+      s.setTimeout(CONNECT_TIMEOUT_MS, () => s.destroy(new Error("connect timed out")));
+      s.once("error", (e) => {
+        console.error(`[dronex sim] cannot reach ${socketPath}: ${e.message}`);
+        reject(new Error("cannot reach the simulation engine"));
+      });
     });
     const client = new CoreClient(socket);
     await client.call("initialize", {
@@ -106,11 +122,20 @@ export class CoreClient {
     }
   }
 
-  call<T = unknown>(method: string, params: unknown = {}): Promise<T> {
+  /** One RPC; rejects after `timeoutMs` (15 s by default; sim/start passes a longer one). */
+  call<T = unknown>(method: string, params: unknown = {}, timeoutMs = CALL_TIMEOUT_MS): Promise<T> {
     if (this.closed) return Promise.reject(this.closed);
     const id = this.next++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, method });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method}: the simulation engine did not answer in time`));
+      }, timeoutMs);
+      const settle = <A>(fn: (a: A) => void) => (a: A) => {
+        clearTimeout(timer);
+        fn(a);
+      };
+      this.pending.set(id, { resolve: settle(resolve as (v: unknown) => void), reject: settle(reject), method });
       this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
     });
   }

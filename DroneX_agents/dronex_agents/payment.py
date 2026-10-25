@@ -69,29 +69,56 @@ def fet_to_atestfet(fet: str) -> int:
     return int(whole or "0") * 10**18 + int(frac)
 
 
+def check_commit(sender: str, msg: CommitPayment, *, buyer: str | None, recipient: str, min_amount: int | None) -> str | None:
+    """Why the seller must not fly for this commit, or None. Only the dispatcher buys; it must pay this agent's
+    wallet, in testnet FET, at least the configured price."""
+    if buyer is not None and sender != buyer:
+        return f"commit from {sender[:12]}…, not the dispatcher"
+    if msg.recipient != recipient:
+        return f"commit names recipient {msg.recipient}, not this agent's wallet"
+    if msg.funds.currency != CURRENCY:
+        return f"commit in {msg.funds.currency}, expected {CURRENCY}"
+    if min_amount is not None:
+        try:
+            amount = int(msg.funds.amount)
+        except (TypeError, ValueError):
+            return f"commit amount {msg.funds.amount!r} is not a number"
+        if amount < min_amount:
+            return f"commit of {amount} {CURRENCY} is below the price ({min_amount})"
+    return None
+
+
 def seller_protocol(
     on_committed: Callable[[Context, str, CommitPayment], Awaitable[None]],
     recipient: str,
     verify_ledger: bool = False,
     on_unpaid: Callable[[Context, CommitPayment, str], Awaitable[None]] | None = None,
+    buyer: str | None = None,
+    min_amount: int | None = None,
 ) -> Protocol:
-    """The flight agent's side. `on_committed(ctx, buyer, commit)` runs the flight the commit pays for. With
-    `verify_ledger`, a commit that names a transaction is checked on the testnet first (to `recipient`, the amount
-    committed); a bad one is cancelled instead of flown."""
+    """The flight agent's side. `on_committed(ctx, buyer, commit)` runs the flight the commit pays for. Commits from
+    anyone but `buyer` (the dispatcher) are ignored; commits to another wallet, in another currency or below
+    `min_amount` are cancelled. With `verify_ledger`, a commit that names a transaction is checked on the testnet
+    too (to `recipient`, the amount committed); a bad one is cancelled instead of flown."""
     proto = Protocol(spec=payment_protocol_spec, role="seller")
 
     @proto.on_message(CommitPayment)
     async def _commit(ctx: Context, sender: str, msg: CommitPayment) -> None:
         ctx.logger.info(f"payment committed by {sender[:12]}… ref={msg.reference} tx={msg.transaction_id}")
-        if verify_ledger and msg.transaction_id:
+        if buyer is not None and sender != buyer:
+            ctx.logger.warning(f"ignored a commit from {sender[:12]}…: only the dispatcher buys flights")
+            return
+        why = check_commit(sender, msg, buyer=buyer, recipient=recipient, min_amount=min_amount)
+        if why is None and verify_ledger and msg.transaction_id:
             why = await asyncio.to_thread(paid_on_ledger, testnet_ledger(), msg.transaction_id, recipient, int(msg.funds.amount), msg.funds.currency)
-            if why:
-                ctx.logger.warning(f"payment not verified: {why}")
-                await ctx.send(sender, CancelPayment(transaction_id=msg.transaction_id, reason=why))
-                if on_unpaid:
-                    await on_unpaid(ctx, msg, why)
-                return
-            ctx.logger.info(f"payment verified on the testnet: {msg.transaction_id}")
+            if why is None:
+                ctx.logger.info(f"payment verified on the testnet: {msg.transaction_id}")
+        if why:
+            ctx.logger.warning(f"payment not accepted: {why}")
+            await ctx.send(sender, CancelPayment(transaction_id=msg.transaction_id or None, reason=why))
+            if on_unpaid:
+                await on_unpaid(ctx, msg, why)
+            return
         await ctx.send(sender, CompletePayment(transaction_id=msg.transaction_id or msg.reference or "none"))
         await on_committed(ctx, sender, msg)  # the paid-for work runs after the receipt, it can take minutes
 
@@ -123,14 +150,57 @@ def _send(recipient: str, amount: int, denom: str, wallet: LocalWallet, memo: st
     return submitted.tx_hash
 
 
-def buyer_protocol(ledger: bool, wallet: LocalWallet | None = None, on_settled: Callable[[Context, str, str], Awaitable[None]] | None = None) -> Protocol:
-    """The dispatcher's side: commits every request (on the testnet ledger from `wallet` when `ledger`), logs
-    completion."""
+def check_request(
+    sender: str,
+    msg: RequestPayment,
+    *,
+    seller: str | None,
+    seller_wallet: str | None,
+    max_amount: int | None,
+    is_open: Callable[[str], bool] | None,
+) -> tuple[Funds | None, str | None]:
+    """(the funds to pay, None) when the dispatcher may pay this request, else (None, why). It pays only the flight
+    agent, into the flight agent's own wallet, in testnet FET, never more than the configured price, and only for an
+    order it has open."""
+    if seller is not None and sender != seller:
+        return None, f"request from {sender[:12]}…, not the flight agent"
+    if seller_wallet is not None and msg.recipient != seller_wallet:
+        return None, f"request names recipient {msg.recipient}, not the flight agent's wallet"
+    if is_open is not None and not (msg.reference and is_open(msg.reference)):
+        return None, f"no open order {msg.reference!r}"
+    funds = next((f for f in msg.accepted_funds if f.currency == CURRENCY), None)
+    if funds is None:
+        return None, f"no price in {CURRENCY}"
+    try:
+        amount = int(funds.amount)
+    except (TypeError, ValueError):
+        return None, f"price {funds.amount!r} is not a number"
+    if amount < 0 or (max_amount is not None and amount > max_amount):
+        return None, f"price {amount} {CURRENCY} is outside 0..{max_amount}"
+    return funds, None
+
+
+def buyer_protocol(
+    ledger: bool,
+    wallet: LocalWallet | None = None,
+    on_settled: Callable[[Context, str, str], Awaitable[None]] | None = None,
+    *,
+    seller: str | None = None,
+    seller_wallet: str | None = None,
+    max_amount: int | None = None,
+    is_open: Callable[[str], bool] | None = None,
+) -> Protocol:
+    """The dispatcher's side: commits a request that passes `check_request` (on the testnet ledger from `wallet`
+    when `ledger`) and rejects any other; logs completion."""
     proto = Protocol(spec=payment_protocol_spec, role="buyer")
 
     @proto.on_message(RequestPayment)
     async def _request(ctx: Context, sender: str, msg: RequestPayment) -> None:
-        funds = msg.accepted_funds[0] if msg.accepted_funds else Funds(amount="0", currency=CURRENCY, payment_method=PAYMENT_METHOD)
+        funds, why = check_request(sender, msg, seller=seller, seller_wallet=seller_wallet, max_amount=max_amount, is_open=is_open)
+        if funds is None:
+            ctx.logger.warning(f"payment request refused: {why}")
+            await ctx.send(sender, RejectPayment(reason=why))
+            return
         tx = ""
         if ledger and wallet is not None:
             try:

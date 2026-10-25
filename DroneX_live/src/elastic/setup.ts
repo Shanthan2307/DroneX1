@@ -134,6 +134,42 @@ async function ensureIndex(client: Client, index: string, properties: Props, rec
   return "created";
 }
 
+/** How long telemetry and events are kept (ELASTIC_RETENTION, e.g. "7d", "30d"). */
+const RETENTION = process.env.ELASTIC_RETENTION ?? "7d";
+
+/**
+ * A data stream with a retention lifecycle, for the high-volume append-only flight data (telemetry, events): an
+ * index template (data_stream + template.lifecycle.data_retention, priority 500 so no built-in template wins),
+ * then the stream itself. Data stream lifecycle is the retention mechanism on Elastic Cloud Serverless (no ILM
+ * there); it works the same on a stack deployment of 8.14 or later. An existing stream gets the retention
+ * re-applied; a plain index of the same name (created before this) is kept and reported, and --recreate turns it
+ * into a data stream (dropping its documents).
+ */
+async function ensureDataStream(client: Client, name: string, properties: Props, recreate: boolean): Promise<string> {
+  await client.indices.putIndexTemplate({
+    name,
+    index_patterns: [name],
+    data_stream: {},
+    priority: 500,
+    template: { mappings: { properties }, lifecycle: { data_retention: RETENTION } },
+  });
+  const isStream = await client.indices
+    .getDataStream({ name })
+    .then((r) => r.data_streams.length > 0)
+    .catch(() => false);
+  if (isStream && !recreate) {
+    await client.indices.putDataLifecycle({ name, data_retention: RETENTION });
+    return `kept (data stream, retention ${RETENTION})`;
+  }
+  if (isStream) await client.indices.deleteDataStream({ name });
+  else if (await client.indices.exists({ index: name })) {
+    if (!recreate) return `kept as a plain index WITHOUT retention; run with --recreate to make it a data stream with ${RETENTION} retention (drops its documents)`;
+    await client.indices.delete({ index: name });
+  }
+  await client.indices.createDataStream({ name });
+  return `created (data stream, retention ${RETENTION})`;
+}
+
 /** A knowledge index: tries the inference endpoints in order; the one that works is reported. */
 async function ensureKnowledgeIndex(client: Client, index: string, props: (inf: string | null) => Props, cfg: ElasticConfig, recreate: boolean): Promise<string> {
   const exists = await client.indices.exists({ index });
@@ -180,9 +216,13 @@ export async function setup(opts: { recreate: boolean; knowledge: boolean; verdi
   console.log(`Elastic ${info.version.build_flavor ?? "stack"} ${info.version.number} at ${cfg.url} (${cfg.serverMode}), prefix ${p}`);
 
   console.log("Flight indices:");
-  for (const [index, props] of [
+  for (const [stream, props] of [
     [INDEX.telemetry(p), telemetryProps],
     [INDEX.events(p), eventProps],
+  ] as const) {
+    console.log(`  ${stream}: ${await ensureDataStream(client, stream, props, opts.recreate)}`);
+  }
+  for (const [index, props] of [
     [INDEX.vehicles(p), vehicleProps],
     [INDEX.flights(p), flightProps],
     [INDEX.scores(p), scoreProps],

@@ -7,6 +7,7 @@ no INTENT_API_KEY means the dispatcher parses requests with its rule-based parse
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -71,6 +72,20 @@ class Settings:
     preset_ids: tuple[str, ...] = field(default_factory=lambda: tuple(PRESET_IDS))
     sim_ui_url: str = "http://127.0.0.1:45010"
     using_default_seeds: bool = False
+    # Links sent to users (the public configurator); render_url stays the API base the agents call.
+    public_url: str = "http://127.0.0.1:3000"
+    # Sent as `x-dronex-agent` on every configurator call; a secret, so kept out of repr and logs.
+    agent_token: str = field(default="", repr=False)
+    # Limits for strangers on ASI:One (DEPLOY.md items 22 and 27).
+    dispatch_max_active: int = 3
+    dispatch_ttl_min: float = 10.0
+    dispatch_cooldown_s: float = 60.0
+    dispatch_rate_per_min: int = 10
+    dispatch_rate_per_day: int = 100
+    dispatch_daily_model_calls: int = 500
+    dispatch_max_input_chars: int = 1500
+    session_max_age_h: float = 24.0
+    default_seed_names: tuple[str, ...] = ()
 
     @property
     def fleet_endpoint(self) -> str:
@@ -85,6 +100,10 @@ class Settings:
         return f"http://{self.host}:{self.dispatcher_port}/submit"
 
     @property
+    def any_mailbox(self) -> bool:
+        return self.mailbox or self.fleet_mailbox or self.flight_mailbox
+
+    @property
     def has_model(self) -> bool:
         return bool(self.intent_api_key)
 
@@ -96,8 +115,9 @@ def load_settings(env_file: Path | None = ENV_FILE) -> Settings:
     if env_file is not None and env_file.exists():
         load_dotenv(env_file, override=False)
     seeds = {k: _env(f"DRONEX_{k.upper()}_SEED", DEFAULT_SEEDS[k]) for k in DEFAULT_SEEDS}
+    render_url = _env("DRONEX_RENDER_URL", "http://127.0.0.1:3000").rstrip("/")
     return Settings(
-        render_url=_env("DRONEX_RENDER_URL", "http://localhost:3000").rstrip("/"),
+        render_url=render_url,
         intent_api_base=_env("INTENT_API_BASE", "https://api.asi1.ai/v1"),
         intent_api_key=_env("INTENT_API_KEY"),
         intent_model=_env("INTENT_MODEL", "asi1-mini"),
@@ -116,7 +136,38 @@ def load_settings(env_file: Path | None = ENV_FILE) -> Settings:
         data_dir=Path(_env("DRONEX_DATA_DIR", str(DATA_DIR))),
         sim_ui_url=_env("DRONEX_SIM_UI_URL", "http://127.0.0.1:45010").rstrip("/"),
         using_default_seeds=any(seeds[k] == DEFAULT_SEEDS[k] for k in seeds),
+        default_seed_names=tuple(f"DRONEX_{k.upper()}_SEED" for k in seeds if seeds[k] == DEFAULT_SEEDS[k]),
+        public_url=_env("DRONEX_PUBLIC_URL", render_url).rstrip("/"),
+        agent_token=_env("DRONEX_AGENT_TOKEN"),
+        dispatch_max_active=int(_env("DRONEX_DISPATCH_MAX_ACTIVE", "3")),
+        dispatch_ttl_min=float(_env("DRONEX_DISPATCH_TTL_MIN", "10")),
+        dispatch_cooldown_s=float(_env("DRONEX_DISPATCH_COOLDOWN_S", "60")),
+        dispatch_rate_per_min=int(_env("DRONEX_DISPATCH_RATE_PER_MIN", "10")),
+        dispatch_rate_per_day=int(_env("DRONEX_DISPATCH_RATE_PER_DAY", "100")),
+        dispatch_daily_model_calls=int(_env("DRONEX_DISPATCH_DAILY_MODEL_CALLS", "500")),
+        dispatch_max_input_chars=int(_env("DRONEX_DISPATCH_MAX_INPUT_CHARS", "1500")),
     )
+
+
+def unsafe_seeds(s: Settings) -> str | None:
+    """Why these settings must not start (DEPLOY.md item 25), or None. The default seeds are in this public repo, so
+    anyone could sign messages as these agents; that only matters once a mailbox makes them reachable."""
+    if not s.any_mailbox or not s.default_seed_names:
+        return None
+    names = ", ".join(s.default_seed_names)
+    return (
+        f"refusing to start: {names} {'is' if len(s.default_seed_names) == 1 else 'are'} still the public development seed while an "
+        "Agentverse mailbox is on (DRONEX_MAILBOX / DRONEX_FLEET_MAILBOX / DRONEX_FLIGHT_MAILBOX), so anyone could sign as these agents. "
+        "Set each DRONEX_*_SEED to a long random string (python -c \"import secrets; print(secrets.token_hex(32))\") in the env file and "
+        "re-register on Agentverse (DEPLOY.md Phase 8), or set DRONEX_MAILBOX=0 for a local-only run."
+    )
+
+
+def exit_if_unsafe(s: Settings) -> None:
+    why = unsafe_seeds(s)
+    if why:
+        print(f"DroneX agents: {why}", file=sys.stderr)
+        raise SystemExit(2)
 
 
 def describe_missing(s: Settings) -> list[str]:
@@ -125,5 +176,7 @@ def describe_missing(s: Settings) -> list[str]:
     if not s.has_model:
         out.append("INTENT_API_KEY is not set: requests are parsed by rules, not by the ASI:One model (get a key at https://asi1.ai/dashboard/api-keys)")
     if s.using_default_seeds:
-        out.append("DRONEX_*_SEED are not set: agent addresses use development seeds (fine locally; set your own for stable public addresses)")
+        out.append("DRONEX_*_SEED are not set: agent addresses use development seeds (fine locally with DRONEX_MAILBOX=0; the agents refuse to start with them while a mailbox is on)")
+    if not s.agent_token:
+        out.append("DRONEX_AGENT_TOKEN is not set: the configurator's agent-only routes (stopping vehicles, the designs list) will refuse the agents when it requires a token")
     return out

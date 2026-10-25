@@ -198,6 +198,8 @@ export class Mirror {
     await this.attach();
     let tick = 0;
     let failures = 0;
+    const maxFailures = Math.max(1, Number(process.env.MIRROR_MAX_TICK_FAILURES ?? "10") || 10);
+    let failuresInARow = 0;
     for (;;) {
       await sleep(1000);
       tick++;
@@ -205,9 +207,17 @@ export class Mirror {
         await this.pollVehicles();
         for (const s of this.sinks) await withTimeout(Promise.resolve(s.flush?.()), 30_000, `${s.name} flush`);
         failures = 0;
+        failuresInARow = 0;
       } catch (e) {
         failures++;
-        console.error("[mirror] tick", e instanceof Error ? e.message : e);
+        failuresInARow++;
+        console.error(`[mirror] tick (${failuresInARow}/${maxFailures} in a row)`, e instanceof Error ? e.message : e);
+        // Reconnecting in place is enough for a stalled connection; if ticks keep failing even so, exit with status 1
+        // and let systemd start a fresh process (deploy/systemd/dronex-mirror.service).
+        if (failuresInARow >= maxFailures) {
+          console.error("[mirror] too many failed ticks in a row; exiting so the service restarts");
+          process.exit(1);
+        }
         if (failures >= 3 || this.daemon.isClosed) {
           await this.reconnect().catch((err) => console.error("[mirror] reconnect", err instanceof Error ? err.message : err));
           failures = 0;

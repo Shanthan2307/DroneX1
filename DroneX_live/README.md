@@ -36,9 +36,40 @@ data, and run inside transactions.
   a row with the reason (the holder, the distance, the band, what to climb above) and an incident, so every
   subscriber sees it. Atomic: two requests for the same air cannot both be granted.
 - `release_corridor` gives one back; the housekeeping `tick` (every 2 s) expires granted corridors past their
-  time and marks a vehicle stale after 7.5 s and offline after 15 s without a position.
+  time and marks a vehicle stale after 7.5 s and offline after 15 s without a position. Once a minute it prunes:
+  corridors never granted and requested over an hour ago, released or expired corridors an hour past their
+  expiry, incidents older than an hour, and vehicles offline for 10 minutes with their position and mission.
+  `tick` runs on the module's schedule only.
 - `upsert_vehicle`, `report_position`, `record_incident`, `assign_mission` are what the mirror and the agents
-  write.
+  write (the agents through the configurator's server).
+
+**Who may write.** Everyone may subscribe: browsers read the airspace live, anonymously. Only the owner and the
+identities in the private `writer` table may call the mutating reducers above (and `keepalive`, a tiny write the
+mirror makes every `MIRROR_KEEPALIVE_HOURS`, default 3, so a hosted database never looks idle). The owner is the
+identity that published the database: `init` stores it in the private `config` table. Only the owner may call
+`add_writer(identity)` and `remove_writer(identity)`. A database published before the allow-list existed has no
+owner; republish it on a clean database.
+
+DroneX's own server processes, the mirror and the configurator's server, share one writer identity: they connect
+with the same token, `SPACETIME_TOKEN`. (Without it, `SPACETIME_TOKEN_FILE` names a file to read the token from, or
+to save a freshly issued one to.) Register it once, signed in to the CLI as the publisher:
+
+```sh
+# mints a token on the server, prints the identity and SPACETIME_TOKEN=..., and calls add_writer
+SPACETIME_SERVER=maincloud SPACETIME_DB=dronex-airspace DroneX_live/scripts/spacetime-add-writer.sh
+# or register an existing token: SPACETIME_TOKEN=... (or a token file as the first argument)
+# take it back: DroneX_live/scripts/spacetime-add-writer.sh --remove 0x<identity>
+```
+
+Put the printed `SPACETIME_TOKEN=...` in the env of both the mirror and the configurator. For local development,
+run the same script without `SPACETIME_SERVER` (it targets http://127.0.0.1:3100) and put the token in
+`DroneX_render/.env.local`. Without a registered token the mirror connects but every write is refused, with a log
+line saying so.
+
+**The mirror in production** exits with status 1 so systemd restarts it: when the engine's socket closes, when the
+SpacetimeDB connection drops, or after `MIRROR_MAX_TICK_FAILURES` (default 10) failed ticks in a row. Set
+`MIRROR_OPERATOR=DroneX`: it is the operator name every visitor sees on each vehicle. Without it the mirror uses
+"DroneX" when `NODE_ENV=production` and the computer's host name otherwise.
 
 The corridor geometry (`spacetime/src/geo.rs`) has unit tests: `cd spacetime && cargo test`.
 
@@ -72,7 +103,8 @@ cd DroneX_live && npm run mirror
 ```
 
 Maincloud instead of local: `spacetime login`, then `SPACETIME_SERVER=maincloud DroneX_live/scripts/spacetime-publish.sh`
-and set `SPACETIME_URI=wss://maincloud.spacetimedb.com` (and the `NEXT_PUBLIC_` pair) in `.env.local`.
+and set `SPACETIME_URI=wss://maincloud.spacetimedb.com` (and the `NEXT_PUBLIC_` pair) in `.env.local`. Then register
+the writer as above. Never publish with `--delete-data` against production.
 
 **The demo**
 

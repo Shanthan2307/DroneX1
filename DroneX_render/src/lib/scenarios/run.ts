@@ -5,6 +5,7 @@
 // for the narration's sake; a step that fails says so and the run goes on where it can.
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { AGENT_HEADER } from "@/lib/agentAuth";
 import { runTool } from "@/lib/ai/intent";
 import { assignMission, releaseCorridor, requestCorridor } from "@/lib/airspace/actions";
 import { elasticEnv, esql, esqlString, semanticSearch } from "@/lib/analytics/elastic";
@@ -12,6 +13,7 @@ import { catalogEntries, judge } from "@/lib/catalog/server";
 import { CoreClient, readDaemon, sleep } from "@/lib/sim/core";
 import { isReady } from "@/lib/sim/ready";
 import { reflyDesign } from "@/lib/sim/refly";
+import { reserveSim, SIM_FULL } from "@/lib/sim/sims";
 import { listFlights } from "@/lib/sim/store";
 import { listVehicles, telemetry, withCore, type Telemetry } from "@/lib/sim/tools";
 import { SCENARIOS, scenarioById, type LatLon, type Scenario, type ScenarioDrone } from "./catalog";
@@ -23,6 +25,17 @@ export interface ScenarioEvent {
   data?: Record<string, unknown>;
 }
 export type Emit = (e: ScenarioEvent) => void;
+
+// The scenarios call this server's own routes (voice, intent, Dispatch status) as the agents do: on loopback with
+// the agent token, so a deployed run neither leaves through the public proxy nor trips the visitor checks.
+// DRONEX_INTERNAL_URL overrides where this server listens.
+function selfFetch(pathname: string, init: RequestInit = {}): Promise<Response> {
+  const base = (process.env.DRONEX_INTERNAL_URL?.trim() || `http://127.0.0.1:${process.env.PORT || 3000}`).replace(/\/+$/, "");
+  const headers = new Headers(init.headers);
+  const token = process.env.DRONEX_AGENT_TOKEN?.trim();
+  if (token) headers.set(AGENT_HEADER, token);
+  return fetch(`${base}${pathname}`, { ...init, headers });
+}
 
 // ---------- the simulator's plan library ----------
 
@@ -129,7 +142,19 @@ async function startDrone(s: Scenario, d: ScenarioDrone, origin: string, emit: E
     emit({ kind: "fail", text: `${d.role}: the hangar drone ${d.presetId} has not been sent to the simulator yet. Open /?build=${d.presetId}, Build all, Fly in simulation once, then run this again.` });
     return null;
   }
-  const flown = await reflyDesign(designId, origin, { latitudeDeg: d.start.lat, longitudeDeg: d.start.lon, headingDeg: d.start.headingDeg });
+  // Scenario drones count against the simulator cap like any other, within the agents' share (src/lib/sim/sims.ts).
+  const slot = await reserveSim({ ip: "scenario", agent: true });
+  if (!slot) {
+    emit({ kind: "fail", text: `${d.role}: ${SIM_FULL}` });
+    return null;
+  }
+  let flown;
+  try {
+    flown = await reflyDesign(designId, origin, { latitudeDeg: d.start.lat, longitudeDeg: d.start.lon, headingDeg: d.start.headingDeg });
+    if (flown) slot.commit(flown);
+  } finally {
+    slot.release();
+  }
   if (!flown) return null;
   started.set(flown.vehicleId, { linkId: flown.linkId, scenario: s.id });
   emit({ kind: "vehicle", text: `${d.role}: ${flown.name} is on the ground at its start (${d.operator}).`, data: { vehicleId: flown.vehicleId, url: flown.url } });
@@ -383,11 +408,11 @@ async function elastic(s: Scenario, origin: string, emit: Emit): Promise<void> {
 
 async function speakAndHear(origin: string, line: string): Promise<{ heard: string | null; error?: string }> {
   try {
-    const wav = await fetch(`${origin}/api/copilot/speak`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: line }) });
+    const wav = await selfFetch(`/api/copilot/speak`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: line }) });
     if (!wav.ok) return { heard: null, error: `Sonic: HTTP ${wav.status}` };
     const form = new FormData();
     form.append("audio", new Blob([await wav.arrayBuffer()], { type: "audio/wav" }), "command.wav");
-    const r = await fetch(`${origin}/api/copilot/transcribe`, { method: "POST", body: form });
+    const r = await selfFetch(`/api/copilot/transcribe`, { method: "POST", body: form });
     const j = (await r.json()) as { text?: string; error?: string };
     return r.ok && j.text ? { heard: j.text } : { heard: null, error: j.error ?? `Ink: HTTP ${r.status}` };
   } catch (e) {
@@ -413,7 +438,7 @@ async function cartesia(s: Scenario, origin: string, emit: Emit): Promise<void> 
       return;
     }
     emit({ kind: "heard", text: heard });
-    const r = await fetch(`${origin}/api/copilot/intent`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: heard, vehicleId: vid }) });
+    const r = await selfFetch(`/api/copilot/intent`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: heard, vehicleId: vid }) });
     const j = (await r.json()) as { reply?: string; actions?: { tool: string; result: string }[]; error?: string };
     if (!r.ok) {
       emit({ kind: "fail", text: `copilot: ${j.error ?? r.status}` });
@@ -438,7 +463,7 @@ function agentsDir(): string {
 }
 
 async function fetchai(s: Scenario, origin: string, emit: Emit): Promise<void> {
-  const status = (await fetch(`${origin}/api/dispatch`).then((r) => r.json()).catch(() => null)) as { live?: { dispatcher: boolean; flight: boolean; fleet: boolean } } | null;
+  const status = (await selfFetch(`/api/dispatch`).then((r) => r.json()).catch(() => null)) as { live?: { dispatcher: boolean; flight: boolean; fleet: boolean } } | null;
   if (!status?.live?.dispatcher || !status.live.flight || !status.live.fleet) {
     emit({ kind: "fail", text: "The Dispatch agents are not all running. Start them with DroneX_agents/dev.sh (./dev.sh starts them too)." });
     return;

@@ -1,0 +1,55 @@
+# The Dispatch agents (DroneX_agents): fleet, flight and dispatcher uAgents, started by dronex_agents/run.py.
+# They call the configurator at http://127.0.0.1:3000 with the x-dronex-agent token, and reach Agentverse /
+# ASI:One outbound only (ports 8001-8003 are firewalled).
+#
+# Writable paths (item 29): uagents writes <agent>_data.json into its working directory, DroneX_agents, with names
+# that depend on the seeds, so that directory is writable. deploy/deploy.sh moves those files to
+# /var/lib/dronex/agents-data and symlinks them into each new release, so they survive deploys. DroneX_agents/logs
+# is a symlink to /var/lib/dronex/agents-logs (what /api/dispatch reads).
+#
+# When one agent dies, run.py stops the other two and exits non-zero, so systemd restarts the unit. Restart=always
+# (not on-failure) also brings it back after a clean exit. The agents refuse to start with a mailbox and a default
+# seed: that shows up here as a restart loop, then a failed unit (journalctl -u dronex-agents).
+[Unit]
+Description=DroneX Dispatch agents (Fetch.ai uAgents)
+After=network-online.target dronex-render.service
+Wants=network-online.target dronex-render.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=dronex
+Group=dronex
+WorkingDirectory=/opt/dronex/current/DroneX_agents
+EnvironmentFile=/etc/dronex/env
+Environment=PYTHONUNBUFFERED=1 DRONEX_LOG_STDOUT=1
+ExecStart=/opt/dronex/current/DroneX_agents/.venv/bin/python -m dronex_agents
+Restart=always
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dronex /opt/dronex/current/DroneX_agents
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

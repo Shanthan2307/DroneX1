@@ -2,10 +2,14 @@
 // browsers that cannot stream to the Ink WebSocket. Returns {text}. The streaming path on the page is the
 // normal one; this is the fallback and the terminal test: curl -F audio=@clip.wav localhost:3000/api/copilot/transcribe
 import { CartesiaKeyMissing, cartesiaClient, keyMissingResponse } from "@/lib/copilot/cartesia";
+import { limitRequest, spendBudget } from "@/lib/rateLimit";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  const limited = limitRequest(request, "transcribe");
+  if (limited) return limited;
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BYTES + 64 * 1024) return Response.json({ error: "audio is too large" }, { status: 413 });
   let form: FormData;
   try {
     form = await request.formData();
@@ -15,6 +19,8 @@ export async function POST(request: Request) {
   const audio = form.get("audio");
   if (!(audio instanceof Blob) || audio.size === 0) return Response.json({ error: "audio is required" }, { status: 400 });
   if (audio.size > MAX_BYTES) return Response.json({ error: "audio is too large" }, { status: 413 });
+  const spent = spendBudget("cartesia");
+  if (spent) return spent;
   let client;
   try {
     client = cartesiaClient();

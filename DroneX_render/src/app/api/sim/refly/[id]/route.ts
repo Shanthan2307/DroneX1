@@ -1,33 +1,43 @@
 // POST /api/sim/refly/<id>: start a design that was already sent to the simulator once (its model, design and
 // profile are in the store) as a new simulated vehicle, without a browser to export the model. The Dispatch flight
 // agent uses this: the hangar drones are packed once from the configurator, then flown on request from ASI:One.
+// Agent-only (x-dronex-agent); goes through the same simulator cap as a Fly, within the agents' share.
 import { connection } from "next/server";
+import { requireAgent } from "@/lib/agentAuth";
 import type { Place } from "@/lib/sim/fly";
 import { reflyDesign } from "@/lib/sim/refly";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "*",
-};
+import { reserveSim, SIM_FULL } from "@/lib/sim/sims";
+import { readFlight } from "@/lib/sim/store";
+import { configuratorOrigin } from "@/lib/publicUrls";
+import { clientIp } from "@/lib/rateLimit";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const denied = requireAgent(request);
+  if (denied) return denied;
   const { id } = await params;
-  const origin = new URL(request.url).origin;
+  if (!(await readFlight(id))) return Response.json({ error: "no such design" }, { status: 404 });
+  const origin = configuratorOrigin(request);
   // Optional body {place: {latitudeDeg, longitudeDeg, headingDeg}}: start there instead of the default spot.
   const body = (await request.json().catch(() => ({}))) as { place?: Place };
+  let slot;
+  try {
+    slot = await reserveSim({ ip: clientIp(request.headers), agent: true });
+  } catch (e) {
+    console.error("[dronex sim] refly", id, e instanceof Error ? e.message : String(e));
+    return Response.json({ error: "the simulation engine is not running" }, { status: 502 });
+  }
+  if (!slot) return Response.json({ error: SIM_FULL }, { status: 503 });
   try {
     const flown = await reflyDesign(id, origin, body.place ?? null);
-    if (!flown) return Response.json({ error: "no such design" }, { status: 404, headers: CORS });
-    return Response.json(flown, { headers: CORS });
+    if (!flown) return Response.json({ error: "no such design" }, { status: 404 });
+    slot.commit(flown);
+    return Response.json(flown);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[dronex sim] refly", id, message);
-    return Response.json({ error: message }, { status: 502, headers: CORS });
+    return Response.json({ error: message }, { status: 502 });
+  } finally {
+    slot.release();
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS });
 }

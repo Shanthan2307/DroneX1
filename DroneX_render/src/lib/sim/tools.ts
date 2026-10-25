@@ -65,15 +65,24 @@ export async function withCore<T>(fn: (c: CoreClient) => Promise<T>): Promise<T>
   }
 }
 
-export async function listVehicles(c: CoreClient): Promise<VehicleRow[]> {
+/** Which vehicles a caller may see and command: `null` means all (the agents, a laptop). */
+export type AllowedIds = readonly string[] | null;
+
+/** Every vehicle, or only the allowed ones. */
+export async function listVehicles(c: CoreClient, allowed: AllowedIds = null): Promise<VehicleRow[]> {
   const { vehicles } = await c.call<{ vehicles: RawVehicle[] }>("vehicle/list", {});
-  return vehicles.map(toVehicleRow);
+  const rows = vehicles.map(toVehicleRow);
+  return allowed ? rows.filter((v) => allowed.includes(v.id)) : rows;
 }
 
-/** The vehicle a command is for: the one named, else the only online one, else an error naming the choices. */
-export async function pickVehicle(c: CoreClient, nameOrId?: string | null): Promise<VehicleRow> {
-  const all = await listVehicles(c);
+/**
+ * The vehicle a command is for, among the allowed ones: the one named, else the only online one, else an error
+ * naming the choices.
+ */
+export async function pickVehicle(c: CoreClient, nameOrId?: string | null, allowed: AllowedIds = null): Promise<VehicleRow> {
+  const all = await listVehicles(c, allowed);
   const online = all.filter((v) => v.presence === "online");
+  if (allowed && all.length === 0) throw new Error("you have no drone in the simulator yet; build one and press Fly in simulation");
   if (nameOrId) {
     const q = nameOrId.toLowerCase();
     const hit = all.find((v) => v.id === nameOrId) ?? online.find((v) => v.name.toLowerCase().includes(q)) ?? all.find((v) => v.name.toLowerCase().includes(q));

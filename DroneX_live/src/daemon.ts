@@ -47,6 +47,7 @@ export class Daemon {
   private buffer = "";
   private closed: Error | null = null;
   private listeners = new Set<Notification>();
+  private closeListeners = new Set<(err: Error) => void>();
 
   private constructor(private readonly socket: Socket) {
     socket.setEncoding("utf8");
@@ -57,7 +58,17 @@ export class Daemon {
       this.pending.clear();
     };
     socket.on("error", fail);
-    socket.on("close", () => fail(this.closed ?? new Error("the simulation engine closed the connection")));
+    socket.on("close", () => {
+      const err = this.closed ?? new Error("the simulation engine closed the connection");
+      fail(err);
+      for (const l of this.closeListeners) l(err);
+    });
+  }
+
+  /** Called once when the socket closes (the engine stopped or restarted, or `close()` was called). */
+  onClose(fn: (err: Error) => void): () => void {
+    this.closeListeners.add(fn);
+    return () => this.closeListeners.delete(fn);
   }
 
   static async connect(socketPath: string, name = "dronex-live"): Promise<Daemon> {
