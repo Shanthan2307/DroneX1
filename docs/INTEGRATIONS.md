@@ -83,6 +83,14 @@ the mailbox existed, the ASI:One agentic model answered *as if* it had reached t
 pass or fail from the dispatcher's own log, never from the model's words. Also found: the default `cosmpy` testnet
 config speaks gRPC, which this network blocks; the agents use Dorado's REST endpoint.
 
+**Connected (2026-10-25).** `connect_agentverse.py` with the owner's key created the mailbox and registered the
+profile in one step: Agentverse search lists "DroneX Dispatch", handle `dronex-dispatch`, description and README.
+A message sent through the mailbox (`live_chat.py --via-agentverse`) reached the dispatcher and was answered. Not
+yet passing: ASI:One's API (`asi1`; this key has no `asi1-*-agentic` models) did not route to the dispatcher in
+three tries, by address or by `@dronex-dispatch`; once it invented a full "agent response", once it said it could
+not reach the agent. ASI:One's docs say agentic discovery filters out agents with an unknown security rating,
+which a listing minutes old may have. Next check: the ASI:One web chat, "@dronex-dispatch help".
+
 Docs: uagents.fetch.ai/docs/examples/asi-1 · docs.agentverse.ai/documentation/advanced-usages/agent-driven-interactive-cards ·
 docs.agentverse.ai/documentation/advanced-usages/predefined-card-schemas · uagents.fetch.ai/docs/guides/agent-payment-protocol ·
 fetch.ai/docs/examples/agentverse/mailbox-agents
