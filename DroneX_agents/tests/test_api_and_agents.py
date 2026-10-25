@@ -78,3 +78,12 @@ def test_settings_from_env(monkeypatch, tmp_path):
         monkeypatch.delenv(k, raising=False)
     s = load_settings(env_file=env)
     assert s.has_model and s.render_url == "http://x:1" and s.payments and not s.using_default_seeds
+
+
+def test_pick_design_prefers_the_hangar_original_over_modified_copies():
+    from dronex_agents.render_api import StoredDesign
+
+    mk = lambda i, name, at: StoredDesign(id=i, name=name, based_on="apex", created_at=at, vehicle="multicopter", frame="X", span_m=0.2)  # noqa: E731
+    designs = [mk("s-old", "Apex 5", "2026-10-24T00:00:00Z"), mk("s-mod", "Apex 5 (modified)", "2026-10-25T00:00:00Z")]
+    assert pick_design(designs, "apex", None).id == "s-old"
+    assert pick_design([designs[1]], "apex", None).id == "s-mod"
