@@ -72,6 +72,8 @@ export function modelBookmarkUrl(base: string, id: string, profile: SimProfile):
 
 const VEHICLE_WAIT_MS = 90_000;
 const PARAM_WAIT_MS = 180_000;
+// Starting SITL (spawning ArduPilot, opening its link) takes longer than an ordinary RPC.
+const SIM_START_TIMEOUT_MS = 120_000;
 
 export interface FlyResult {
   vehicleId: string;
@@ -98,7 +100,7 @@ export async function flyDesign(id: string, profile: SimProfile, { modelUrl, ope
       ...place,
       ...(ground !== null ? { altitudeM: ground } : {}),
       name: `${profile.name} (DroneX)`.slice(0, 64),
-    });
+    }, SIM_START_TIMEOUT_MS);
     const vehicle = await waitForVehicle(client, link.id);
     await client.call("vehicle/save", { id: vehicle.id, name: profile.name });
     await client.call("vehicle/size", { id: vehicle.id, sizeCm: Math.max(1, Math.round(profile.span_m * 100)) });

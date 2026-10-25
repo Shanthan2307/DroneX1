@@ -10,6 +10,8 @@ export interface DispatchAgentsFile {
 }
 
 export interface DispatchStatus {
+  /** Served on the public site (DRONEX_PUBLIC_URL set): the page hides operator hints (scripts, ports). */
+  public: boolean;
   agents: DispatchAgentsFile | null;
   /** The agent processes answering on their local ports. */
   live: { dispatcher: boolean; flight: boolean; fleet: boolean };

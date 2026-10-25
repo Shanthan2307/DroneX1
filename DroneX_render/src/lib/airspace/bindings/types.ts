@@ -10,6 +10,14 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const Config = __t.object("Config", {
+  id: __t.u8(),
+  owner: __t.identity(),
+  prunedAt: __t.i64(),
+  keepaliveAt: __t.i64(),
+});
+export type Config = __Infer<typeof Config>;
+
 export const Corridor = __t.object("Corridor", {
   id: __t.u64(),
   requestId: __t.string(),
@@ -83,4 +91,10 @@ export const Vehicle = __t.object("Vehicle", {
   updatedAt: __t.i64(),
 });
 export type Vehicle = __Infer<typeof Vehicle>;
+
+export const Writer = __t.object("Writer", {
+  identity: __t.identity(),
+  addedAt: __t.i64(),
+});
+export type Writer = __Infer<typeof Writer>;
 

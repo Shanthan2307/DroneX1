@@ -1,6 +1,7 @@
-// Connections to the shared airspace (SpacetimeDB) from the configurator: the browser view subscribes through
-// `connectAirspace`; the /api/airspace routes use `withAirspace` (one short-lived connection per request) to read a
-// snapshot or call a reducer for agents that cannot speak the SpacetimeDB protocol. Rows are converted to the plain
+// Connections to the shared airspace (SpacetimeDB) from the configurator: the browser view subscribes (read-only,
+// anonymous); the /api/airspace routes use `withAirspace` in server.ts (one short-lived connection per request, with
+// the server's persisted token) to read a snapshot or call a reducer for agents that cannot speak the SpacetimeDB
+// protocol. Rows are converted to the plain
 // JSON shapes in types.ts.
 import { DbConnection, tables } from "./bindings/index";
 import type { Corridor, Incident, MissionAssignment, Position, Vehicle } from "./bindings/types";
@@ -75,7 +76,9 @@ export interface Airspace {
 }
 
 /** Connects, subscribes to every table and resolves when the first snapshot is in the cache. */
-export function connectAirspace(opts: { uri?: string; db?: string; timeoutMs?: number } = {}): Promise<Airspace> {
+export function connectAirspace(
+  opts: { uri?: string; db?: string; timeoutMs?: number; token?: string; onToken?: (token: string, identity: string) => void } = {},
+): Promise<Airspace> {
   const target = airspaceTarget();
   const uri = opts.uri ?? target.uri;
   const db = opts.db ?? target.db;
@@ -92,7 +95,9 @@ export function connectAirspace(opts: { uri?: string; db?: string; timeoutMs?: n
     DbConnection.builder()
       .withUri(uri)
       .withDatabaseName(db)
-      .onConnect((conn, identity) => {
+      .withToken(opts.token)
+      .onConnect((conn, identity, token) => {
+        opts.onToken?.(token, identity.toHexString());
         conn
           .subscriptionBuilder()
           .onApplied(() =>
@@ -118,16 +123,6 @@ export function connectAirspace(opts: { uri?: string; db?: string; timeoutMs?: n
       .onConnectError((_ctx, error) => done(() => reject(error)))
       .build();
   });
-}
-
-/** Server-side: one connection for the duration of `fn`, closed afterwards. */
-export async function withAirspace<T>(fn: (air: Airspace) => Promise<T>): Promise<T> {
-  const air = await connectAirspace();
-  try {
-    return await fn(air);
-  } finally {
-    air.close();
-  }
 }
 
 /** Waits until a row satisfying `test` appears in the cache (reducer effects arrive as subscription updates). */

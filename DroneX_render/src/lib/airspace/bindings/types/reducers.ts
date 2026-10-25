@@ -6,16 +6,22 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AddWriterReducer from "../add_writer_reducer";
 import AssignMissionReducer from "../assign_mission_reducer";
+import KeepaliveReducer from "../keepalive_reducer";
 import RecordIncidentReducer from "../record_incident_reducer";
 import ReleaseCorridorReducer from "../release_corridor_reducer";
+import RemoveWriterReducer from "../remove_writer_reducer";
 import ReportPositionReducer from "../report_position_reducer";
 import RequestCorridorReducer from "../request_corridor_reducer";
 import UpsertVehicleReducer from "../upsert_vehicle_reducer";
 
+export type AddWriterParams = __Infer<typeof AddWriterReducer>;
 export type AssignMissionParams = __Infer<typeof AssignMissionReducer>;
+export type KeepaliveParams = __Infer<typeof KeepaliveReducer>;
 export type RecordIncidentParams = __Infer<typeof RecordIncidentReducer>;
 export type ReleaseCorridorParams = __Infer<typeof ReleaseCorridorReducer>;
+export type RemoveWriterParams = __Infer<typeof RemoveWriterReducer>;
 export type ReportPositionParams = __Infer<typeof ReportPositionReducer>;
 export type RequestCorridorParams = __Infer<typeof RequestCorridorReducer>;
 export type UpsertVehicleParams = __Infer<typeof UpsertVehicleReducer>;

@@ -330,6 +330,8 @@ export function runAssistantTool(name: string, args: Args, req: AssistantRequest
 }
 
 const MAX_ROUNDS = 5;
+/** A cap on every model reply (cost): the answer is a few spoken sentences. */
+const MAX_TOKENS = 400;
 
 /** The reply as speech: models add markdown even when told not to; Sonic would read the asterisks. */
 export function forSpeech(text: string): string {
@@ -350,7 +352,7 @@ export async function answer(req: AssistantRequest): Promise<AssistantResult> {
   const out = { suggestions: [] as Change[], apply: [] as Change[] };
   const actions: AssistantResult["actions"] = [];
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const res = await api.chat.completions.create({ model, messages, tools: TOOLS, tool_choice: "auto", temperature: 0.2 });
+    const res = await api.chat.completions.create({ model, messages, tools: TOOLS, tool_choice: "auto", temperature: 0.2, max_tokens: MAX_TOKENS });
     const msg = res.choices[0]?.message;
     if (!msg) break;
     const calls = (msg.tool_calls ?? []).filter((c) => c.type === "function");
@@ -377,6 +379,6 @@ export async function answer(req: AssistantRequest): Promise<AssistantResult> {
       messages.push({ role: "tool", tool_call_id: call.id, content: result });
     }
   }
-  const last = await api.chat.completions.create({ model, messages: [...messages, { role: "user", content: "Answer now in two to four short spoken sentences, from the tool results only." }], temperature: 0.2 });
+  const last = await api.chat.completions.create({ model, messages: [...messages, { role: "user", content: "Answer now in two to four short spoken sentences, from the tool results only." }], temperature: 0.2, max_tokens: MAX_TOKENS });
   return { reply: forSpeech(last.choices[0]?.message.content ?? "") || "I could not finish that answer.", ...out, actions, model };
 }

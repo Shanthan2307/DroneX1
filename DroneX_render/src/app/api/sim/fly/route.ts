@@ -6,7 +6,13 @@ import { validateDesign } from "../../../../../prototype/drone-assembly/src/desi
 import { flyDesign, modelBookmarkUrl, type SimProfile } from "@/lib/sim/fly";
 import { newId, saveFlight } from "@/lib/sim/store";
 import { configuratorOrigin } from "@/lib/publicUrls";
+import { reserveSim, SIM_FULL, type Slot } from "@/lib/sim/sims";
+import { ownershipCookie } from "@/lib/ownership";
+import { clientIp, limitRequest } from "@/lib/rateLimit";
 
+// Exported models measured so far are 0.05 to 6.1 MB (Tarot X6, modified), but the CineLog25 and the VTBIRD VTOL
+// have not been measured, so the 40 MB ceiling stays until they are (docs/DEPLOY.md item 32). Caddy caps the body
+// at 42 MB in front of this.
 const MODEL_MAX_BYTES = 40 * 1024 * 1024;
 const PARAM_NAME = /^[A-Z0-9_]{1,16}$/;
 const FRAME = /^[A-Za-z0-9_+-]{1,100}$/;
@@ -47,6 +53,9 @@ function readProfile(raw: unknown): SimProfile | string {
 }
 
 export async function POST(request: Request) {
+  const limited = limitRequest(request, "fly");
+  if (limited) return limited;
+  if (Number(request.headers.get("content-length") ?? 0) > MODEL_MAX_BYTES + 1024 * 1024) return fail(413, "the model is too large");
   let form: FormData;
   try {
     form = await request.formData();
@@ -75,17 +84,29 @@ export async function POST(request: Request) {
   const bytes = new Uint8Array(await model.arrayBuffer());
   if (bytes.length < 12 || String.fromCharCode(...bytes.subarray(0, 4)) !== "glTF") return fail(400, "the model is not a glTF binary");
 
+  let slot: Slot | null;
+  try {
+    // A browser's Fly is never an agent's, even on a laptop: one sim per visitor address, inside the cap.
+    slot = await reserveSim({ ip: clientIp(request.headers), agent: false });
+  } catch (e) {
+    console.error("[dronex sim]", e instanceof Error ? e.message : String(e));
+    return fail(502, "the simulation engine is not running");
+  }
+  if (!slot) return fail(503, SIM_FULL);
+
   const id = newId();
   const design = { ...checked.design, id };
-  await saveFlight(id, { design, profile, model: bytes });
-
   const origin = configuratorOrigin(request);
   try {
+    await saveFlight(id, { design, profile, model: bytes });
     const flown = await flyDesign(id, profile, { modelUrl: modelBookmarkUrl(origin, id, profile), openUrl: `${origin}/?sim=${id}` });
-    return Response.json({ id, ...flown });
+    slot.commit(flown);
+    return Response.json({ id, ...flown }, { headers: { "Set-Cookie": ownershipCookie(request, flown.vehicleId) } });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[dronex sim]", message);
     return fail(502, message);
+  } finally {
+    slot.release();
   }
 }
