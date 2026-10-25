@@ -39,6 +39,7 @@ export const TRACKS: Track[] = [
     color: "#7c5cff",
     role: "The shared, persistent airspace: every operator's vehicles, missions, corridors and incidents in one live world, with the rules enforced next to the data.",
     uses: [
+      { surface: "configurator", what: "Scenario \"Two operators, one sky\": two operators ask for crossing corridors; the reducer refuses the second at the same height and grants it higher, and both drones fly their missions.", where: "DroneX_render/src/lib/scenarios/run.ts" },
       { surface: "live", what: "The mirror publishes every simulated vehicle's position, mode and battery into the airspace tables through reducers.", where: "DroneX_live/src/sinks/spacetime.ts" },
       { surface: "live", what: "Corridor reservations: a mission leg asks for a corridor and altitude band; the reducer grants it or refuses an overlap atomically.", where: "DroneX_live/spacetime/src/lib.rs" },
       { surface: "configurator", what: "The airspace view on the Copilot page subscribes to the tables and draws every drone and reserved corridor live.", where: "DroneX_render/src/components/airspace/AirspaceView.tsx" },
@@ -54,6 +55,7 @@ export const TRACKS: Track[] = [
     color: "#f04e98",
     role: "Search and analytics over the flight data the product produces: telemetry, events and verdicts across every simulated flight, plus the ArduPilot manual and the catalog notes in a semantic field.",
     uses: [
+      { surface: "configurator", what: "Scenario \"After the flight, find the signal\": the courier flies, then ES|QL sets its battery drain against the configurator's verdict and Jina semantic search finds the ArduPilot parameters to set.", where: "DroneX_render/src/lib/scenarios/run.ts" },
       { surface: "live", what: "The mirror bulk-indexes telemetry, mode changes, GPS and EKF health, building-avoidance brakes and mission legs per flight.", where: "DroneX_live/src/sinks/elastic.ts" },
       { surface: "live", what: "ArduPilot's parameter documentation and the catalog's datasheet notes are indexed into semantic_text for grounded answers.", where: "DroneX_live/src/elastic/setup.ts" },
       { surface: "simulator", what: "An Agent Builder agent answers 'why did the courier drift on leg 3' with ES|QL over the flight's EKF and GPS fields.", where: "DroneX_live/elastic/agent.md" },
@@ -69,6 +71,7 @@ export const TRACKS: Track[] = [
     color: "#2bb7a0",
     role: "DroneX Dispatch: a sentence in ASI:One becomes a verified, flying vehicle. A dispatcher orchestrates fleet agents (one per hangar drone) and a flight agent that owns the simulation engine.",
     uses: [
+      { surface: "configurator", what: "Scenario \"A clinic asks, the fleet answers\": a request through the Agentverse mailbox becomes a physics-checked, corridor-cleared flight.", where: "DroneX_render/src/lib/scenarios/run.ts" },
       { surface: "agents", what: "The Dispatcher parses intent, asks for missing facts with a form card, shows candidates in a carousel, the physics verdict in a review card.", where: "DroneX_agents/dronex_agents/dispatcher.py" },
       { surface: "agents", what: "Fleet agents answer capability queries from the physics verdict and mission matrix served by the configurator.", where: "DroneX_agents/dronex_agents/fleet.py" },
       { surface: "agents", what: "The flight agent starts the design in the simulator, waits for GPS and EKF, takes off, reserves a corridor in the shared airspace and flies to the place, through the engine's tools directly.", where: "DroneX_agents/dronex_agents/flight.py" },
@@ -86,6 +89,7 @@ export const TRACKS: Track[] = [
     color: "#ff8a3d",
     role: "The voice of DroneX: a build assistant that explains every part and mission and proposes swaps the physics has passed, and a flight copilot with hands on the controls. Ink listens, Sonic speaks.",
     uses: [
+      { surface: "configurator", what: "Scenario \"Hands on the sticks\": a patrol flown by voice, every command real audio through Sonic and Ink, with the callouts spoken as they fire.", where: "DroneX_render/src/lib/scenarios/run.ts" },
       { surface: "configurator", what: "Ask DroneX: hold to talk (Ink) or type a question about the drone on the pad; the answer is spoken (Sonic), and part swaps the physics passed come back as buttons that change the drone.", where: "DroneX_render/src/components/assistant/BuildAssistant.tsx" },
       { surface: "configurator", what: "The assistant's tools read the parts dataset and run dronePhysics.js: part details, compatible options, try a change, mission requirements, search for a passing swap.", where: "DroneX_render/src/lib/ai/assistant.ts" },
       { surface: "configurator", what: "The Copilot page streams the microphone to Ink and speaks replies and callouts with Sonic, with barge-in.", where: "DroneX_render/src/components/copilot/VoiceCopilot.tsx" },

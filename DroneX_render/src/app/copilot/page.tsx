@@ -19,6 +19,9 @@ export default function CopilotPage() {
           <Link href="/" style={{ color: "#9aa3b2" }}>
             Configurator
           </Link>
+          <Link href="/scenarios" style={{ color: "#9aa3b2" }}>
+            Scenarios
+          </Link>
           <a href="http://127.0.0.1:45010/" target="_blank" rel="noreferrer" style={{ color: "#9aa3b2" }}>
             Simulator
           </a>

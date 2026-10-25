@@ -21,6 +21,9 @@ export default function DispatchPage() {
           <Link href="/copilot" style={{ color: "#9aa3b2" }}>
             Copilot
           </Link>
+          <Link href="/scenarios" style={{ color: "#9aa3b2" }}>
+            Scenarios
+          </Link>
           <a href="http://127.0.0.1:45010/" target="_blank" rel="noreferrer" style={{ color: "#9aa3b2" }}>
             Simulator
           </a>
