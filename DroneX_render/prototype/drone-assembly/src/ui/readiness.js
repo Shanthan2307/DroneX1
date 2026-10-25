@@ -67,6 +67,8 @@ function el(tag, props = {}, ...kids) {
 }
 
 const CSS = `
+.rdy-fleet { margin: 6px 0 0; font-size: 12px; color: var(--muted, #9aa3b2); }
+.rdy-fleet-tag { display: inline-block; padding: 1px 6px; border-radius: 999px; border: 1px solid #f04e98; color: #f04e98; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; }
 .rdy { position: fixed; right: 32px; top: 60px; width: 280px; z-index: 10; padding: 8px; border: 1px solid var(--hairline);
   border-radius: 12px; background: var(--surface); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   color: var(--text); font-family: var(--font); font-size: 12px; text-align: left; transition: opacity 400ms ease, border-color 400ms ease; }
@@ -112,6 +114,35 @@ export function mountReadiness({ host = null, hud = null, destinations = null, o
   let phase = "pad";
   const hudEl = hud ?? document.getElementById("hud");
   const panel = el("section", { class: "rdy", "aria-live": "polite", "aria-label": "Flight readiness", hidden: true });
+  // Elastic: fleet statistics for this exact build from the flight analytics (/api/analytics, written by the live
+  // layer from simulated flights). Shown as one line under the rows when Elastic answers; silent otherwise.
+  const fleet = el("p", { class: "rdy-fleet", hidden: true });
+  let fleetKey = "";
+  function pushFleet(build, missionId) {
+    const b = build ?? {};
+    if (!b.airframeId || typeof fetch !== "function") {
+      fleet.hidden = true;
+      return;
+    }
+    const q = new URLSearchParams({ airframeId: b.airframeId, motorId: b.motorId ?? "", propellerId: b.propellerId ?? "", batteryId: b.batteryId ?? "", payloadId: b.payloadId ?? "", missionId: missionId ?? "" });
+    const key = q.toString();
+    if (key === fleetKey) return;
+    fleetKey = key;
+    fetch(`/api/analytics?${key}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (fleetKey !== key) return;
+        if (!j?.available || !j.line) {
+          fleet.hidden = true;
+          return;
+        }
+        fleet.replaceChildren(el("span", { class: "rdy-fleet-tag", text: "Elastic" }), el("span", { text: ` ${j.line}` }));
+        fleet.hidden = false;
+      })
+      .catch(() => {
+        fleet.hidden = true;
+      });
+  }
   const head = el("div", { class: "rdy-head" });
   const title = el("h2", { class: "rdy-title" });
   const fix = el("span", { class: "rdy-fix" });
@@ -121,6 +152,7 @@ export function mountReadiness({ host = null, hud = null, destinations = null, o
   const rowsEl = el("ul", { class: "rdy-rows" });
   const result = el("div", { class: "rdy-result", hidden: true });
   panel.append(head, to, dest, rowsEl, result);
+  panel.append(fleet);
   (host ?? document.body).append(panel);
   document.body.dataset.readinessPanel = "1";
 
@@ -165,6 +197,7 @@ export function mountReadiness({ host = null, hud = null, destinations = null, o
 
   function render() {
     const t = panelText(state, phase, dests);
+    pushFleet(state.build, state.build?.missionId ?? state.mission?.id ?? null);
     panel.hidden = !t.visible;
     if (!t.visible) return;
     panel.classList.toggle("rdy-ready", Boolean(t.ready));

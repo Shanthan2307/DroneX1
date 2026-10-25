@@ -1,0 +1,4 @@
+# Vendored agent-skill copies and the editor symlink from `npx skills add`; skills-lock.json records what was installed.
+.agents/
+.claude/
+node_modules/

@@ -1,0 +1,123 @@
+# DroneX: score new flights (Elastic Workflows, technical preview).
+#
+# Every 5 minutes: find flights that ended in the last window and have no score yet, compute the same score the
+# live layer computes (battery drain against the design's estimate, EKF variance peak, GPS dropouts, brakes) from
+# the telemetry, event and verdict indices, write one document per flight into dronex-flight-scores, and flag the
+# anomalies. The live layer writes "scored_by: mirror" at flight end; this workflow writes "scored_by: workflow"
+# and only for flights the mirror missed (for instance when it was not running), so the two never fight.
+#
+# Import: Kibana → Workflows → New workflow → paste. Steps use the generic `elasticsearch.request` action, which
+# is documented for the preview, so the YAML depends on nothing undocumented; the ES|QL goes through POST /_query.
+# Check the step names against the editor's autocompletion for your Kibana version.
+name: dronex-score-flights
+description: Score DroneX simulated flights that ended without a score and flag anomalies
+enabled: true
+tags: [dronex, flights, anomalies]
+consts:
+  prefix: dronex
+  window: 15m
+  sagRatioLimit: 1.3
+  ekfPeakLimit: 0.5
+  satellitesMin: 6
+triggers:
+  - type: scheduled
+    with:
+      every: 5m
+  - type: manual
+steps:
+  - name: ended_unscored_flights
+    type: elasticsearch.request
+    with:
+      method: POST
+      path: /_query
+      body:
+        query: |
+          FROM {{consts.prefix}}-flights
+          | WHERE status == "ended" AND ended_at > NOW() - {{consts.window}}
+          | LOOKUP JOIN {{consts.prefix}}-flight-scores ON flight_id
+          | WHERE scored_by IS NULL
+          | KEEP flight_id, vehicle_id, vehicle_name, design_id, started_at, ended_at
+          | LIMIT 50
+        format: json
+
+  - name: each_flight
+    type: foreach
+    foreach: steps.ended_unscored_flights.output.values
+    steps:
+      - name: fix_stats
+        type: elasticsearch.request
+        with:
+          method: POST
+          path: /_query
+          body:
+            query: |
+              FROM {{consts.prefix}}-telemetry
+              | WHERE flight_id == "{{item.0}}"
+              | STATS fixes = COUNT(*), started = MIN(@timestamp), ended = MAX(@timestamp),
+                      battery_first = MAX(battery_pct), battery_last = MIN(battery_pct),
+                      ekf_peak = MAX(ekf_variance), sats_min = MIN(gps_satellites),
+                      alt_max = MAX(altitude_above_home_m), speed_max = MAX(ground_speed_mps)
+            format: json
+
+      - name: event_stats
+        type: elasticsearch.request
+        with:
+          method: POST
+          path: /_query
+          body:
+            query: |
+              FROM {{consts.prefix}}-events
+              | WHERE flight_id == "{{item.0}}"
+              | STATS gps_dropouts = COUNT(*) WHERE type == "gps-quality" AND data.degraded == true,
+                      brake_events = COUNT(*) WHERE type == "mode" AND data.to == "BRAKE",
+                      mode_changes = COUNT(*) WHERE type == "mode"
+            format: json
+
+      - name: design_estimate
+        type: elasticsearch.request
+        with:
+          method: POST
+          path: /_query
+          body:
+            query: |
+              FROM {{consts.prefix}}-verdicts
+              | WHERE design_id == "{{item.3}}"
+              | STATS hover_min = MAX(summary.hoverTime_min)
+            format: json
+
+      - name: score
+        type: ai.prompt
+        # The arithmetic and the thresholds are small; the prompt step turns the three query outputs into one JSON
+        # document with the fields of dronex-flight-scores. If your Kibana offers a `transform`/script step, use
+        # it instead of the model for determinism; the rules are in consts and in DroneX_live/src/elastic/shape.ts.
+        with:
+          prompt: |
+            Compute a flight score as strict JSON with these keys and nothing else:
+            flight_id, vehicle_id, vehicle_name, design_id, "@timestamp" (the flight's end time), fixes,
+            duration_min (minutes between started and ended, 2 decimals),
+            battery_drain_pct_per_min ((battery_first - battery_last) / duration_min, null if duration under 0.5 min),
+            battery_drain_estimate_pct_per_min (100 / hover_min, null if hover_min is null),
+            battery_sag_ratio (drain / estimate, null if either is null),
+            ekf_variance_peak, gps_dropouts, gps_satellites_min, brake_events, mode_changes,
+            max_altitude_above_home_m, max_ground_speed_mps,
+            anomalies (list of strings, see rules), anomalous (true if anomalies is not empty), scored_by ("workflow").
+            Rules: battery_sag_ratio > {{consts.sagRatioLimit}} → "battery drains N % faster than the estimate";
+            ekf_variance_peak > {{consts.ekfPeakLimit}} → "EKF variance peaked at X";
+            gps_dropouts >= 1 → "N GPS dropout(s)"; gps_satellites_min < {{consts.satellitesMin}} → "as few as N satellites";
+            brake_events >= 1 → "braked for a building N time(s)".
+            Flight: {{item}}
+            Fix stats (columns then values): {{steps.fix_stats.output}}
+            Event stats: {{steps.event_stats.output}}
+            Design estimate: {{steps.design_estimate.output}}
+
+      - name: write_score
+        type: elasticsearch.request
+        with:
+          method: PUT
+          path: /{{consts.prefix}}-flight-scores/_doc/{{item.0}}
+          body: "{{steps.score.output}}"
+
+      - name: note
+        type: console
+        with:
+          message: "scored flight {{item.0}} ({{item.2}})"
