@@ -6,20 +6,20 @@ so. Review this file to decide which to take on.
 
 | Technology | Role it would play | Fit | Status | Assessed |
 |---|---|---|---|---|
-| [Fetch.ai / ASI:One](#fetchai--asione-dronex-dispatch) | User-facing agent layer: a sentence in ASI:One becomes a verified, flying vehicle | Strong | Planned, not built | 2026-10-24 |
+| [Fetch.ai / ASI:One](#fetchai--asione-dronex-dispatch) | User-facing agent layer: a sentence in ASI:One becomes a verified, flying vehicle | Strong | Chosen, building (2026-10-25) | 2026-10-24 |
 | [Creao AI](#creao-ai-back-office-agents) | Back-office automation: sourcing, datasheets, reports, procurement | Good for the periphery, wrong for the core | Assessed, undecided | 2026-10-24 |
 | [CRS Credit API](#crs-credit-api-finance-the-build) | Financing, business credit and compliance screening at the end of the design flow | Weak for the core, plausible as the last step | Assessed, undecided | 2026-10-24 |
-| [Cartesia](#cartesia-voice-copilot-for-the-simulator) | Voice copilot in the simulator: spoken commands in, callouts and warnings out | Strong for the simulation engine, weak for the configurator | Assessed, undecided | 2026-10-24 |
+| [Cartesia](#cartesia-voice-copilot-for-the-simulator) | Voice copilot in the simulator: spoken commands in, callouts and warnings out | Strong for the simulation engine, weak for the configurator | Chosen, building (2026-10-25) | 2026-10-24 |
 | [Bitdeer AI Model Studio](#bitdeer-ai-model-studio-the-brain-behind-the-assistant) | Hosted open-weight LLM inference (OpenAI-compatible) as the model behind the simulator assistant and a design advisor | Neutral: a provider swap, not a capability | Assessed, undecided | 2026-10-24 |
 | [Moss](#moss-sub-10-ms-retrieval-inside-the-app) | In-process semantic search over the catalog, hangar, places and assistant tools; the retrieval layer under a voice copilot | Useful but small alone; strong paired with Cartesia | Assessed, undecided | 2026-10-24 |
 | [SpaceXAI (Grok)](#spacexai-make-it-legendary-real-space-data-grok-cursor) | Real space data into the simulator (GNSS satellite visibility over the city, satellite terrain) plus Grok Voice or Imagine; built in Cursor | Moderate: one strong idea, two process rules | Assessed, undecided | 2026-10-24 |
 | [Convex](#convex-one-live-typescript-backend-for-the-configurator) | Live TypeScript backend: shared hangar, cross-machine designs and models, durable Fly workflow, mirrored live telemetry | Good for sharing and multi-user; a platform choice otherwise | Assessed, undecided | 2026-10-24 |
 | [Microsoft: Built for the Real World + Customer Impact](#microsoft-built-for-the-real-world-and-customer-impact-award) | A framing track: production-minded agent, measurable usefulness, responsible design | Good if the Dispatch agent is built; no technology to add | Assessed, undecided | 2026-10-24 |
 | [Apify + Best Actor](#apify-a-datasheet-and-thrust-table-actor-for-the-catalog) | A published Actor that turns manufacturer and retailer pages into sourced catalog records and measured thrust tables | Good and honest, but offline tooling, not the live loop | Assessed, undecided | 2026-10-24 |
-| [Elastic](#elastic-search-and-analytics-over-the-flight-data-exhaust) | Elastic Cloud Serverless over flight telemetry, ArduPilot docs and catalog notes; an agent and a workflow that find the signal across flights | Good and distinct: the only track about the data the product already produces | Assessed, undecided | 2026-10-24 |
+| [Elastic](#elastic-search-and-analytics-over-the-flight-data-exhaust) | Elastic Cloud Serverless over flight telemetry, ArduPilot docs and catalog notes; an agent and a workflow that find the signal across flights | Good and distinct: the only track about the data the product already produces | Chosen, built 2026-10-25 (live indexing needs the cluster) | 2026-10-24 |
 | [Bright Data](#bright-data-unlock-find-and-fetch-the-datasheets) | Scraping infrastructure (Unlocker, SERP, Scraper APIs, hosted MCP) for the datasheet and price pipeline and for live lookups by the agents | Good for the catalog pipeline; same slot as Apify, pick one | Assessed, undecided | 2026-10-24 |
 | [Mana.space](#manaspace-a-build-tool-track) | A build-tool and distribution track: Mana plans, writes or debugs part of the work; bonus if a DroneX app or agent lives inside Mana | Neutral: process, not product; could not verify the product online | Assessed, undecided | 2026-10-24 |
-| [SpacetimeDB](#spacetimedb-a-shared-persistent-airspace) | Shared persistent airspace: every operator's vehicles, missions, corridors and agents in one live world with rules enforced next to the data | Strong and the title sponsor; same slot as Convex, pick one | Assessed, undecided | 2026-10-24 |
+| [SpacetimeDB](#spacetimedb-a-shared-persistent-airspace) | Shared persistent airspace: every operator's vehicles, missions, corridors and agents in one live world with rules enforced next to the data | Strong and the title sponsor; same slot as Convex, pick one | Chosen, building (2026-10-25) | 2026-10-24 |
 
 ---
 
@@ -71,7 +71,7 @@ by uAgents) and the `uagents` package.
 **Risks.** Card responses may arrive as prose, not JSON. Discovery needs the agents online with their manifest
 published before judging, like `dev.sh`.
 
-**Decision:** planned, build later.
+**Decision:** chosen on 2026-10-25; being built in `DroneX_agents/`.
 
 Docs: uagents.fetch.ai/docs/examples/asi-1 · docs.agentverse.ai/documentation/advanced-usages/agent-driven-interactive-cards ·
 docs.agentverse.ai/documentation/advanced-usages/predefined-card-schemas · uagents.fetch.ai/docs/guides/agent-payment-protocol ·
@@ -295,7 +295,7 @@ second. Arming and mode changes by voice need an explicit confirmation step or t
 only 2 concurrent TTS streams, enough for one copilot. Sonic reads numbers well, but telemetry phrasing needs a
 small template layer so "37.76097" is never spoken.
 
-**Decision:** undecided. Recommendation: the strongest fit of the four so far. If entered, build the simulator
+**Decision:** chosen on 2026-10-25; being built at `/copilot` in the configurator. Recommendation was: the strongest fit of the four so far. If entered, build the simulator
 copilot first (commands, callouts, building warnings), then the phone-in dispatcher if time allows; leave the
 configurator narration out.
 
@@ -822,7 +822,7 @@ deployment types; set `inference_id` explicitly. Telemetry volume is fine for a 
 to what the analytics need. The trial lasts 14 days, so timing matters. If Moss or Convex search is also chosen,
 decide by corpus: in-process lookups for the voice path, Elastic for the large corpus and analytics.
 
-**Decision:** undecided. Recommendation: a strong, honest fit that no other track covers, with real product
+**Decision:** chosen on 2026-10-25; built in `DroneX_live/src/elastic` and `DroneX_live/elastic`. Recommendation was: a strong, honest fit that no other track covers, with real product
 value (the first flight-to-design feedback loop); enter it if a one-day ingest and agent build fits the plan.
 
 Docs: elastic.co/docs/solutions/search/semantic-search/semantic-search-semantic-text · elastic.co/docs/explore-analyze/ai-features/agent-skills ·
@@ -1016,7 +1016,7 @@ at full telemetry rate; mirror at the rate the airspace needs. Server modules in
 confirmed. Two live-state paths (daemon WebSocket and Spacetime) need a clear boundary: the daemon owns
 control, Spacetime owns the shared picture and rules. Overlaps Convex entirely for our purpose.
 
-**Decision:** undecided. Recommendation: if a backend track is entered, prefer Spacetime over Convex for the
+**Decision:** chosen on 2026-10-25 over Convex; being built in `DroneX_live/spacetime`. Recommendation was: if a backend track is entered, prefer Spacetime over Convex for the
 shared airspace, and build the corridor-reservation rule as the demo moment: two drones ask for the same
 corridor, one is refused and rerouted over the buildings.
 

@@ -48,6 +48,11 @@ by the Next app. The physics runs in the browser, in plain JavaScript, from JSON
 | Tests | Vitest (`src/**/*.test.ts`), plus `node prototype/drone-assembly/scripts/check-drone-physics.mjs` |
 | Data | JSON in repo (`prototype/drone-assembly/src/data/drone/`, hand-edited, validated by `check-drone-physics.mjs`) |
 
+| Voice | Cartesia (`@cartesia/cartesia-js`): Sonic text-to-speech, Ink speech-to-text, server-minted tokens |
+| Intent | Any OpenAI-compatible chat endpoint (`openai` client; ASI:One by default) for function calling over `src/lib/sim/tools.ts` |
+| Shared state | SpacetimeDB (`spacetimedb`): the airspace tables, subscribed in the browser |
+| Analytics | Elastic Cloud Serverless, reached from the configurator only through `/api/analytics` |
+
 Tailwind is loaded only by `src/app/globals.css`; the old app's React Three Fiber, drei, zod and zustand were
 removed on 2026-10-24.
 
@@ -60,6 +65,16 @@ src/components/assembly/    AssemblyStage (mounts the configurator), markup.ts, 
 src/lib/sim/                core.ts (Core unix-socket JSON-RPC client), store.ts (.dronex/sim), fly.ts (start the
                             vehicle, name, size, bookmark, parameters), simProfile.test.ts
 src/lib/ai/grokClient.ts    a standalone xAI client, not wired into the UI (kept for later use)
+src/lib/ai/intent.ts        sentence -> tool call (function calling) -> Core RPC receipt; /api/copilot/intent
+src/lib/sim/tools.ts        the copilot's hands: status, takeoff, go to a place, mode, RTL, land, arm/disarm
+src/lib/catalog/server.ts   the hangar and the verdict as data: /api/catalog, /api/verdict
+src/lib/tracks.ts           the "Built with" registry: which sponsor technology does what, where (sidebar + /api/tracks)
+src/lib/copilot/            Cartesia: token, speech helpers, telemetry feed, callout templates (tested)
+src/lib/airspace/           SpacetimeDB: bindings, browser connection, types
+src/lib/analytics/          Elastic: the minimal REST client behind /api/analytics
+src/app/copilot/            the Copilot page: AirspaceView (SpacetimeDB) beside VoiceCopilot (Cartesia)
+src/app/api/{catalog,verdict,tracks,analytics,airspace,copilot}/   route handlers for the tracks and the agents
+src/components/tracks/      TracksPanel, the "Built with" sidebar
 prototype/drone-assembly/   the configurator (its own index.html + Vite config for standalone runs)
   docs/drone-integration.md the front-end contract: build, manifest, display scale, verdict, readiness
   scripts/check-drone-physics.mjs   physics and compatibility checks (node, no deps)

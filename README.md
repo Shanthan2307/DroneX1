@@ -149,12 +149,19 @@ the configurator. Print it once.
 
 ---
 
-## The two engines
+## The four pieces
 
 | Folder | Engine | What it is |
 |---|---|---|
 | `DroneX_render/` | Rendering | The landing page and the drone configurator (Next.js + three.js). Browse real drones, build them part by part, swap parts, test against missions, send to simulation. |
 | `dronex/DroneX_1/` | Simulation | A fork of UXDuck Core (Rust daemon, ArduPilot SITL, web UI over Cesium 3D tiles) with our own account backend and solid buildings. `dronex/uxduck-core/` is the untouched upstream for diffing. |
+| `DroneX_live/` | Live layer | The mirror on the simulator's socket feeding the **shared airspace (SpacetimeDB)**, where every operator's drones, corridors and incidents live under rules enforced next to the data, and the **flight analytics (Elastic)**, where every simulated flight, event and verdict is searchable and an agent finds the signal. |
+| `DroneX_agents/` | Agents | **DroneX Dispatch (Fetch.ai / ASI:One)**: a dispatcher, one fleet agent per hangar drone and a flight agent. A sentence in ASI:One becomes a verified, flying vehicle, with Interactive Cards along the way. |
+
+The configurator also hosts the **voice copilot (Cartesia)** at `/copilot`: spoken commands in, callouts and
+warnings out, beside the live airspace. Every screen carries a "Built with" sidebar that says exactly what each
+technology does there and in which file; the registry is `DroneX_render/src/lib/tracks.ts`, and
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) records why each was chosen and what was assessed and set aside.
 
 ## Run it
 
@@ -162,11 +169,16 @@ the configurator. Print it once.
 # once
 (cd dronex/DroneX_1/backend && npm install)
 (cd DroneX_render && npm install)
+(cd DroneX_live && npm install)
+cp DroneX_render/.env.example DroneX_render/.env.local   # then fill in the keys you have
 
 ./dev.sh
 ```
 
-Configurator: http://localhost:3000. Simulation: http://127.0.0.1:45010/. Approve the simulation page's
+Configurator: http://localhost:3000. Copilot: http://localhost:3000/copilot. Simulation: http://127.0.0.1:45010/.
+Pieces whose keys are missing say so and stay off; the rest runs. The agents need a Python 3.11 venv
+(`DroneX_agents/README.md`), the airspace the SpacetimeDB CLI (`DroneX_live/README.md`), the analytics an Elastic
+Cloud Serverless project (`DroneX_live/elastic/README.md`), the copilot a Cartesia key (`DroneX_render/docs/COPILOT.md`). Approve the simulation page's
 pairing code the first time:
 
 ```sh

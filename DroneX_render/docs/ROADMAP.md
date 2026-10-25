@@ -29,7 +29,7 @@ drone (from a template or from scratch), Save / Save as / rename / duplicate / d
 model `dronex.design` v1 in `prototype/drone-assembly/src/designs.js` (localStorage key `dronex.designs.v1`).
 Open data gaps are listed as TODO(source) in `prototype/drone-assembly/src/data/drone/SOURCES.md`.
 
-## Phase 4: Fly it in the simulation engine (current)
+## Phase 4: Fly it in the simulation engine (done)
 
 Decided on 2026-10-24: there is no export file and no hand-off. The configurator and the simulation engine
 (`../dronex/DroneX_1`: UXDuck Core + ArduPilot SITL, with its own web UI over Cesium 3D tiles) are one project,
@@ -48,6 +48,28 @@ to the simulation page with that drone on the map as a simulated vehicle.
   throttle and airspeeds, not the airframe's mass or motor curves. Starts on the ground at the simulation UI's
   default spot (`DRONEX_SIM_LAT` / `LON` / `HEADING` override). Tiltrotor airframes fly as a tilt-tri quadplane.
 - Next: start in the air as an option; a per-design SITL model (ArduPilot's JSON frame files) for mass and thrust.
+
+## Phase 5: The city has more than one drone (current)
+
+The flying half grows a voice, a shared airspace, memory and a front door, each on a sponsor technology that does
+real work and is named on screen (the "Built with" sidebar, `src/lib/tracks.ts`):
+
+- **Voice copilot (Cartesia)** at `/copilot`: Ink streaming speech-to-text in, Sonic callouts and replies out,
+  barge-in; commands go through one tool layer (`src/lib/sim/tools.ts`) chosen by function calling
+  (`src/lib/ai/intent.ts`); callouts are deterministic templates over live telemetry (`/api/copilot/events`).
+- **Shared airspace (SpacetimeDB)**: `DroneX_live` mirrors every vehicle into tables; corridor reservations,
+  altitude bands and separation are reducers; the airspace view on `/copilot` subscribes live; `/api/airspace`
+  serves agents that cannot speak Spacetime.
+- **Flight analytics (Elastic)**: the mirror indexes fixes, events and verdicts; ArduPilot's parameter manual,
+  the catalog notes and the physics formula notes sit in `semantic_text`; an Agent Builder agent and a Workflow
+  find the signal; the mission card shows fleet statistics from `/api/analytics`.
+- **DroneX Dispatch (Fetch.ai / ASI:One)**: `DroneX_agents` (dispatcher, fleet agents, flight agent) over
+  `/api/catalog`, `/api/verdict`, `/api/sim/designs`, `/api/sim/refly/<id>`, `/api/copilot/intent` and
+  `/api/airspace`, with Interactive Cards and the Payment Protocol as a bonus.
+
+Dependencies added for this phase, with the human's approval: `openai`, `@cartesia/cartesia-js`, `spacetimedb`
+(configurator); `spacetimedb`, `@elastic/elasticsearch`, `tsx`, `vitest` (live layer); `uagents`, `openai`,
+`httpx`, `python-dotenv`, `pytest` (agents). The verdict stays code; no model computes a number.
 
 ## Out of scope
 
