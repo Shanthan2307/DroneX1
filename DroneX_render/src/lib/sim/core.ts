@@ -4,6 +4,7 @@
 import { readFile } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import path from "node:path";
+import { simulatorUrl } from "../publicUrls";
 
 export interface DaemonInfo {
   pid: number;
@@ -31,8 +32,8 @@ export async function readDaemon(dir = coreDataDir()): Promise<DaemonInfo> {
   return { pid: info.pid ?? 0, version: info.version ?? "", port: info.port, socket: info.socket, uiUrl: info.uiUrl };
 }
 
-/** Where the simulation UI is: the daemon's own answer, else its loopback port. */
-export const uiUrlOf = (d: DaemonInfo): string => (d.uiUrl ?? `http://127.0.0.1:${d.port}/`).replace(/\/+$/, "") + "/";
+/** Where the simulation UI is: DRONEX_SIM_UI_URL when deployed, else the daemon's own answer, else its loopback port. */
+export const uiUrlOf = (d: DaemonInfo): string => simulatorUrl(d.uiUrl ?? `http://127.0.0.1:${d.port}`);
 
 interface RpcError {
   code: number;

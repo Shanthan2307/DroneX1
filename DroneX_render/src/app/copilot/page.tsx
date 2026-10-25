@@ -4,6 +4,7 @@ import Link from "next/link";
 import AirspaceView from "@/components/airspace/AirspaceView";
 import VoiceCopilot from "@/components/copilot/VoiceCopilot";
 import TracksPanel from "@/components/tracks/TracksPanel";
+import { simulatorUrl } from "@/lib/publicUrls";
 
 export const metadata = { title: "DroneX Copilot" };
 
@@ -19,7 +20,7 @@ export default function CopilotPage() {
           <Link href="/" style={{ color: "#9aa3b2" }}>
             Configurator
           </Link>
-          <a href="http://127.0.0.1:45010/" target="_blank" rel="noreferrer" style={{ color: "#9aa3b2" }}>
+          <a href={simulatorUrl()} target="_blank" rel="noreferrer" style={{ color: "#9aa3b2" }}>
             Simulator
           </a>
         </nav>

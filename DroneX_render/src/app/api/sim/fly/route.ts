@@ -5,6 +5,7 @@ import { droneCatalog } from "../../../../../prototype/drone-assembly/src/data/d
 import { validateDesign } from "../../../../../prototype/drone-assembly/src/designs.js";
 import { flyDesign, modelBookmarkUrl, type SimProfile } from "@/lib/sim/fly";
 import { newId, saveFlight } from "@/lib/sim/store";
+import { configuratorOrigin } from "@/lib/publicUrls";
 
 const MODEL_MAX_BYTES = 40 * 1024 * 1024;
 const PARAM_NAME = /^[A-Z0-9_]{1,16}$/;
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
   const design = { ...checked.design, id };
   await saveFlight(id, { design, profile, model: bytes });
 
-  const origin = new URL(request.url).origin;
+  const origin = configuratorOrigin(request);
   try {
     const flown = await flyDesign(id, profile, { modelUrl: modelBookmarkUrl(origin, id, profile), openUrl: `${origin}/?sim=${id}` });
     return Response.json({ id, ...flown });

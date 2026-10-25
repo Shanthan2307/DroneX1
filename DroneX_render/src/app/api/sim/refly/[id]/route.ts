@@ -4,6 +4,7 @@
 import { connection } from "next/server";
 import { flyDesign, modelBookmarkUrl, type SimProfile } from "@/lib/sim/fly";
 import { readFlight } from "@/lib/sim/store";
+import { configuratorOrigin } from "@/lib/publicUrls";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +18,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const flight = await readFlight(id);
   if (!flight) return Response.json({ error: "no such design" }, { status: 404, headers: CORS });
   const profile = flight.profile as SimProfile;
-  const origin = new URL(request.url).origin;
+  const origin = configuratorOrigin(request);
   try {
     const flown = await flyDesign(id, profile, { modelUrl: modelBookmarkUrl(origin, id, profile), openUrl: `${origin}/?sim=${id}` });
     const design = flight.design as { name?: string };
