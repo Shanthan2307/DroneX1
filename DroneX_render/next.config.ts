@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // The route indicator sits bottom-left, over the configurator's current-drone bar; errors still show without it.
   devIndicators: false,
-  // Basic hardening: no embedding in other sites, no MIME sniffing, no mic/camera/location.
+  // Basic hardening: no embedding in other sites, no MIME sniffing, no camera/location. The microphone is allowed
+  // for this origin only: the Copilot page's push-to-talk streams it to Cartesia Ink.
   async headers() {
     return [
       {
@@ -14,7 +15,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "microphone=(), camera=(), geolocation=()" },
+          { key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" },
         ],
       },
     ];
