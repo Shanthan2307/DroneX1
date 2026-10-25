@@ -170,7 +170,7 @@ export async function takeoff(c: CoreClient, v: VehicleRow, altitudeM: number): 
 }
 
 export async function goTo(c: CoreClient, v: VehicleRow, latitudeDeg: number, longitudeDeg: number, altitudeM: number): Promise<string> {
-  const r = await send(c, v, { type: "go-to", latitudeDeg, longitudeDeg, altitudeM, altitudeFrame: "above-home", heading: { mode: "face-destination" } });
+  const r = await send(c, v, { type: "go-to", latitudeDeg, longitudeDeg, altitudeM, altitudeFrame: "above-home" });
   return said(`go to ${latitudeDeg.toFixed(5)}, ${longitudeDeg.toFixed(5)} at ${altitudeM} m`, r);
 }
 
@@ -183,8 +183,8 @@ export interface Place {
 
 /** A town, landmark or address, through the engine's hosted place search (first hit, located). */
 export async function findPlace(c: CoreClient, query: string, near?: { latitudeDeg: number; longitudeDeg: number } | null): Promise<Place | null> {
-  const { hits } = await c.call<{ hits: { key: string; text: string }[] }>("place/search", { query, limit: 3, ...(near ? { near } : {}) });
-  const hit = hits[0];
+  const { suggestions } = await c.call<{ suggestions?: { key: string; text: string }[] }>("place/search", { query, limit: 3, ...(near ? { near } : {}) });
+  const hit = suggestions?.[0];
   if (!hit) return null;
   const { place } = await c.call<{ place: Place }>("place/locate", { key: hit.key, text: hit.text, ...(near ? { near } : {}) });
   return place;
