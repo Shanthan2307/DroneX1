@@ -9,7 +9,7 @@ import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 // The drone modules, through one facade (vehicle.js; contract in docs/drone-integration.md).
 import {
-  presetIds, getPreset, presetToBuild, applyOption, optionsWithCompat, evaluateBuild, partDetails,
+  presetIds, getPreset, presetToBuild, applyOption, applySlotOption, optionsWithCompat, evaluateBuild, partDetails,
   buildManifest, sceneBounds, missionOf, destinations as destinationsFor, readiness as readinessFor,
 } from "./vehicle.js";
 import { droneCatalog } from "./data/droneCatalog.js";
@@ -388,6 +388,7 @@ const selector = createSelector({
     if (prev && prev !== part) choreo.highlight(prev, false);
     if (!part) {
       card.hide();
+      publishState();
       if (prev && !choreo.state.busy) choreo.unfocus(); // Esc / empty click: back to the whole drone
       return;
     }
@@ -396,6 +397,7 @@ const selector = createSelector({
     choreo.focus(part, matchMedia("(max-width: 760px)").matches ? { frac: 0.4, shift: 0.24 } : {});
     card.show(part, cardContext(part));
     sfx.play("ui", { gain: 0.5 });
+    publishState();
   },
   resolve: (part) => (landingOn() ? null : part),
   // Every click on a part flips its look (opaque ↔ clear); empty space only deselects.
@@ -617,7 +619,31 @@ function syncUi() {
     syncUi.hangarKey = hangarKey;
     hangar.refresh();
   }
+  publishState();
 }
+
+// The build assistant (src/components/assistant, a React panel over this page) and this front end talk through
+// window events, so neither imports the other: "dronex:state" says which drone is on the pad, its build and the
+// clicked part; "dronex:swap" {slot, partId} and "dronex:mission" {missionId} ask for a change, made exactly as
+// the part card's Options and the destination picker make it; "dronex:state-request" asks for a fresh state.
+function publishState(force = false) {
+  const sel = selector.selected;
+  const spec = sel ? current.manifest.find((s) => s.id === sel.id) : null;
+  const selected = spec?.slot ? { slot: spec.slot, partId: spec.record?.id ?? null, name: spec.name } : null;
+  const detail = { name: current.origin.name, modified: current.modified, build: current.build, selected, busy: Boolean(choreo.state.busy) };
+  const key = JSON.stringify(detail);
+  // The last key lives on the function: syncUi can run during start-up, before a module-level let would exist.
+  if (!force && key === publishState.key) return;
+  publishState.key = key;
+  window.dispatchEvent(new CustomEvent("dronex:state", { detail }));
+}
+window.addEventListener("dronex:state-request", () => publishState(true));
+window.addEventListener("dronex:swap", (e) => {
+  const { slot, partId } = e.detail ?? {};
+  if (!slot || !partId || choreo.state.busy) return;
+  void swapTo(applySlotOption(current.build, slot, partId));
+});
+window.addEventListener("dronex:mission", (e) => setMission(e.detail?.missionId));
 
 // Animate the drone to `build` (choreo.applyManifest: lift, unscrew, fly in, settle), then physics, HUD and the
 // open card switch to it. Resolves to false if nothing changed or the swap was cancelled.

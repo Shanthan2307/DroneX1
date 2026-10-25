@@ -237,6 +237,8 @@ export class SonicSpeaker {
 
 export type ListenMode = "push" | "always";
 
+const FLIGHT_KEYTERMS = ["take off", "return to launch", "guided", "loiter", "brake", "land", "metres", "Ferry Building", "pier", "battery"];
+
 type InkMessage =
   | { type: "transcript"; text: string; is_final: boolean }
   | { type: "flush_done" }
@@ -273,6 +275,8 @@ export class InkListener {
   constructor(
     private readonly tokenProvider: () => Promise<VoiceToken | null>,
     events?: ListenerEvents,
+    /** Words Ink should expect (flight terms by default; the build assistant passes part and mission words). */
+    private readonly keyterms: string[] = FLIGHT_KEYTERMS,
   ) {
     if (events) this.events = events;
   }
@@ -288,7 +292,7 @@ export class InkListener {
 
   private url(token: VoiceToken, mode: ListenMode): string {
     const q = new URLSearchParams({ model: token.sttModel, encoding: "pcm_s16le", sample_rate: String(STT_SAMPLE_RATE), cartesia_version: token.version, access_token: token.token });
-    for (const k of ["take off", "return to launch", "guided", "loiter", "brake", "land", "metres", "Ferry Building", "pier", "battery"]) q.append("keyterm", k);
+    for (const k of this.keyterms) q.append("keyterm", k);
     return `${WS_BASE}${mode === "always" ? "/stt/turns/websocket" : "/stt/websocket"}?${q}`;
   }
 

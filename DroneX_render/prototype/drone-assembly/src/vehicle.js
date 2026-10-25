@@ -55,6 +55,9 @@ export function applyOption(build, kind, recordId) {
   return slot ? droneCatalogModule.applyDroneOption(build, slot, recordId) : { ...build };
 }
 
+// The same, by slot name ("battery") instead of part kind, for the build assistant's swaps.
+export const applySlotOption = (build, slot, recordId) => droneCatalogModule.applyDroneOption(build, slot, recordId);
+
 // ---------- missions, readiness ----------
 
 export const missionOf = (build) => droneCatalog.missions.find((m) => m.id === build?.missionId) ?? null;

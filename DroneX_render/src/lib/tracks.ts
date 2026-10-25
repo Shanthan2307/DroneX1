@@ -84,8 +84,10 @@ export const TRACKS: Track[] = [
     product: "Sonic streaming text-to-speech and Ink streaming speech-to-text.",
     chip: "Cartesia",
     color: "#ff8a3d",
-    role: "The voice copilot: hands on the controls, eyes on the aircraft. Spoken commands in through Ink, callouts and warnings out through Sonic.",
+    role: "The voice of DroneX: a build assistant that explains every part and mission and proposes swaps the physics has passed, and a flight copilot with hands on the controls. Ink listens, Sonic speaks.",
     uses: [
+      { surface: "configurator", what: "Ask DroneX: hold to talk (Ink) or type a question about the drone on the pad; the answer is spoken (Sonic), and part swaps the physics passed come back as buttons that change the drone.", where: "DroneX_render/src/components/assistant/BuildAssistant.tsx" },
+      { surface: "configurator", what: "The assistant's tools read the parts dataset and run dronePhysics.js: part details, compatible options, try a change, mission requirements, search for a passing swap.", where: "DroneX_render/src/lib/ai/assistant.ts" },
       { surface: "configurator", what: "The Copilot page streams the microphone to Ink and speaks replies and callouts with Sonic, with barge-in.", where: "DroneX_render/src/components/copilot/VoiceCopilot.tsx" },
       { surface: "configurator", what: "Deterministic callouts from live telemetry: battery and altitude thresholds, mode changes, GPS and EKF health, building ahead, mission leg.", where: "DroneX_render/src/app/api/copilot/events/route.ts" },
       { surface: "simulator", what: "Spoken commands become the same Core RPC tool calls the typed assistant makes: arm, take off, go to a place, change mode, return.", where: "DroneX_render/src/lib/sim/tools.ts" },
