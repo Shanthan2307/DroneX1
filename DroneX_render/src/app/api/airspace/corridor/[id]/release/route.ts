@@ -3,10 +3,7 @@
 import { connection } from "next/server";
 import { mayActOn } from "@/lib/ownership";
 import { limitRequest } from "@/lib/rateLimit";
-import { toCorridor, waitFor } from "@/lib/airspace/client";
-import { withAirspace } from "@/lib/airspace/server";
-
-class NotYours extends Error {}
+import { NotYours, releaseCorridor } from "@/lib/airspace/actions";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
@@ -15,17 +12,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   if (!/^\d+$/.test(id)) return Response.json({ error: "corridor ids are integers" }, { status: 400 });
   try {
-    const corridor = await withAirspace(async (air) => {
-      const held = [...air.conn.db.corridor.iter()].find((c) => c.id === BigInt(id));
-      if (!held) throw new Error("no such corridor");
-      if (!mayActOn(request, held.vehicleId)) throw new NotYours("not your vehicle's corridor");
-      await air.conn.reducers.releaseCorridor({ id: BigInt(id) });
-      const row = await waitFor(
-        () => [...air.conn.db.corridor.iter()].find((c) => c.id === BigInt(id)),
-        (c) => c.status !== "granted",
-      );
-      return toCorridor(row);
-    });
+    const corridor = await releaseCorridor(Number(id), (vehicleId) => mayActOn(request, vehicleId));
     return Response.json({ corridor });
   } catch (e) {
     if (e instanceof NotYours) return Response.json({ error: e.message }, { status: 403 });

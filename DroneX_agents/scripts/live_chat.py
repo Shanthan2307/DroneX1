@@ -32,7 +32,8 @@ via_agentverse = "--via-agentverse" in sys.argv
 rules = {k: v for k, v in local_rules(s).items() if not (via_agentverse and k == dispatcher_address(s))}
 me = Agent(name="live-chat-client", seed="dronex live chat client seed", port=8009, endpoint="http://127.0.0.1:8009/submit", resolve=LocalFirstResolver(rules), enable_agent_inspector=False, publish_agent_details=False, report_events=False)
 chat = Protocol(spec=chat_protocol_spec)
-lines = [a for a in sys.argv[1:] if a != "--via-agentverse"] or ["Fly a 10 km ridge run to Twin Peaks within 15 minutes"]
+FULL_CARDS = "--full-cards" in sys.argv
+lines = [a for a in sys.argv[1:] if a not in ("--via-agentverse", "--full-cards")] or ["Fly a 10 km ridge run to Twin Peaks within 15 minutes"]
 state = {"i": 0, "last": 0.0}
 
 
@@ -45,7 +46,7 @@ async def on_msg(ctx: Context, sender: str, msg: ChatMessage) -> None:
         elif isinstance(c, MetadataContent):
             kind = c.metadata.get("card_kind")
             payload = json.loads(c.metadata.get("card_payload", "{}"))
-            print(f"  [card {kind}] {json.dumps(payload)[:700]}")
+            print(f"  [card {kind}] {json.dumps(payload) if FULL_CARDS else json.dumps(payload)[:700]}")
     state["last"] = asyncio.get_event_loop().time()
 
 

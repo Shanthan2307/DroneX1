@@ -95,6 +95,10 @@ function toFix(t: RawTelemetry): Fix | null {
   };
 }
 
+/** A promise that rejects after `ms`, so one stuck sink cannot stop the mirror for good. */
+const withTimeout = <T>(p: Promise<T>, ms: number, what: string): Promise<T> =>
+  Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${what}: no answer in ${ms / 1000} s`)), ms))]);
+
 export class Mirror {
   private vehicles = new Map<string, VehicleInfo>();
   private lastFixAt = new Map<string, number>();
@@ -103,9 +107,11 @@ export class Mirror {
   private readonly minGapMs: number;
 
   constructor(
-    private readonly daemon: Daemon,
+    private daemon: Daemon,
     private readonly sinks: Sink[],
     hz: number,
+    /** Where to reconnect when the connection to the simulation engine dies or goes quiet. */
+    private readonly socketPath: string | null = null,
   ) {
     this.minGapMs = 1000 / Math.max(0.2, hz);
   }
@@ -167,19 +173,8 @@ export class Mirror {
     for (const s of this.sinks) await s.onFix?.(fix, v);
   }
 
-  /**
-   * Runs until something it depends on is gone, then exits with status 1 so systemd restarts it with
-   * fresh connections: when the engine's socket closes, or after MIRROR_MAX_TICK_FAILURES ticks (default 10) fail
-   * in a row. The SpacetimeDB sink exits the same way when its connection drops.
-   */
-  async run(): Promise<never> {
-    for (const s of this.sinks) await s.start?.();
-    this.daemon.onClose((err) => {
-      console.error(`[mirror] ${err.message}; exiting so the service restarts`);
-      process.exit(1);
-    });
-    const maxFailures = Math.max(1, Number(process.env.MIRROR_MAX_TICK_FAILURES ?? "10") || 10);
-    let failuresInARow = 0;
+  /** Listen to telemetry on the current connection and take the latest fix of every vehicle. */
+  private async attach(): Promise<void> {
     this.daemon.onNotification((method, params) => {
       if (method === "telemetry/update") void this.onTelemetry(params as RawTelemetry).catch((e) => console.error("[mirror] telemetry", e));
     });
@@ -187,20 +182,45 @@ export class Mirror {
     const latest = await this.daemon.call<{ vehicles?: RawTelemetry[]; telemetry?: RawTelemetry[] } | RawTelemetry[]>("telemetry/subscribe", {});
     const initial = Array.isArray(latest) ? latest : (latest.vehicles ?? latest.telemetry ?? []);
     for (const t of initial) await this.onTelemetry(t);
+  }
+
+  /** A fresh connection after the old one died or stopped answering (seen after hours of running). */
+  private async reconnect(): Promise<void> {
+    if (!this.socketPath) return;
+    this.daemon.close();
+    this.daemon = await Daemon.connect(this.socketPath);
+    await this.attach();
+    console.log("[mirror] reconnected to the simulation engine");
+  }
+
+  async run(): Promise<never> {
+    for (const s of this.sinks) await s.start?.();
+    await this.attach();
     let tick = 0;
+    let failures = 0;
+    const maxFailures = Math.max(1, Number(process.env.MIRROR_MAX_TICK_FAILURES ?? "10") || 10);
+    let failuresInARow = 0;
     for (;;) {
       await sleep(1000);
       tick++;
       try {
         await this.pollVehicles();
-        for (const s of this.sinks) await s.flush?.();
+        for (const s of this.sinks) await withTimeout(Promise.resolve(s.flush?.()), 30_000, `${s.name} flush`);
+        failures = 0;
         failuresInARow = 0;
       } catch (e) {
+        failures++;
         failuresInARow++;
         console.error(`[mirror] tick (${failuresInARow}/${maxFailures} in a row)`, e instanceof Error ? e.message : e);
+        // Reconnecting in place is enough for a stalled connection; if ticks keep failing even so, exit with status 1
+        // and let systemd start a fresh process (deploy/systemd/dronex-mirror.service).
         if (failuresInARow >= maxFailures) {
           console.error("[mirror] too many failed ticks in a row; exiting so the service restarts");
           process.exit(1);
+        }
+        if (failures >= 3 || this.daemon.isClosed) {
+          await this.reconnect().catch((err) => console.error("[mirror] reconnect", err instanceof Error ? err.message : err));
+          failures = 0;
         }
       }
       if (tick % 60 === 0) console.log(`[mirror] ${this.vehicles.size} vehicles known, ${[...this.vehicles.values()].filter((v) => v.presence === "online").length} online`);
@@ -221,7 +241,7 @@ async function main() {
   else console.log("[mirror] Elastic sink off" + (has("ELASTIC_URL") ? " (sink not built)" : " (ELASTIC_URL not set)"));
   const hz = Number(process.env.MIRROR_HZ ?? "2");
   console.log(`[mirror] on ${daemonInfo.socket}, ${hz} fixes/s per vehicle, sinks: ${sinks.map((s) => s.name).join(", ")}`);
-  await new Mirror(daemon, sinks, hz).run();
+  await new Mirror(daemon, sinks, hz, daemonInfo.socket).run();
 }
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;

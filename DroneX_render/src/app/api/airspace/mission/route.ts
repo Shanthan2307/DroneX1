@@ -4,8 +4,7 @@
 import { connection } from "next/server";
 import { requireAgent } from "@/lib/agentAuth";
 import { limitRequest } from "@/lib/rateLimit";
-import { toMission, waitFor } from "@/lib/airspace/client";
-import { withAirspace } from "@/lib/airspace/server";
+import { assignMission } from "@/lib/airspace/actions";
 import type { MissionRequest } from "@/lib/airspace/types";
 
 export async function POST(request: Request) {
@@ -26,14 +25,7 @@ export async function POST(request: Request) {
   const status = typeof body.status === "string" && body.status ? body.status : "proposed";
   if (!vehicleId || !missionId) return Response.json({ error: "vehicleId and missionId are required" }, { status: 400 });
   try {
-    const mission = await withAirspace(async (air) => {
-      await air.conn.reducers.assignMission({ vehicleId, missionId, agent, status });
-      const row = await waitFor(
-        () => [...air.conn.db.missionAssignment.iter()].find((m) => m.vehicleId === vehicleId),
-        (m) => m.missionId === missionId && m.status === status,
-      );
-      return toMission(row);
-    });
+    const mission = await assignMission({ vehicleId, missionId, agent, status });
     return Response.json({ mission });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

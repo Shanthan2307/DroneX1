@@ -5,9 +5,7 @@
 import { connection } from "next/server";
 import { mayActOn } from "@/lib/ownership";
 import { limitRequest } from "@/lib/rateLimit";
-import { randomUUID } from "node:crypto";
-import { toCorridor, waitFor } from "@/lib/airspace/client";
-import { withAirspace } from "@/lib/airspace/server";
+import { requestCorridor } from "@/lib/airspace/actions";
 import type { CorridorRequest } from "@/lib/airspace/types";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -31,30 +29,9 @@ export async function POST(request: Request) {
     return Response.json({ error: "vehicleId, from {lat, lon}, to {lat, lon}, minAltM and maxAltM are required" }, { status: 400 });
   }
   if (!mayActOn(request, vehicleId)) return Response.json({ error: "not your vehicle" }, { status: 403 });
-  const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId : randomUUID();
-  // Bounded so one request cannot hold the whole sky for a day.
-  const widthM = Math.min(Math.max(num(body.widthM) ?? 40, 1), 500);
-  const ttlS = Math.round(Math.min(Math.max(num(body.ttlS) ?? 600, 10), 3600));
+  const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId : undefined;
   try {
-    const corridor = await withAirspace(async (air) => {
-      await air.conn.reducers.requestCorridor({
-        requestId,
-        vehicleId,
-        fromLat: from.lat,
-        fromLon: from.lon,
-        toLat: to.lat,
-        toLon: to.lon,
-        minAlt,
-        maxAlt,
-        widthM,
-        ttlS: BigInt(ttlS),
-      });
-      const row = await waitFor(
-        () => [...air.conn.db.corridor.iter()].find((c) => c.requestId === requestId),
-        () => true,
-      );
-      return toCorridor(row);
-    });
+    const corridor = await requestCorridor({ requestId, vehicleId, from, to, minAltM: minAlt, maxAltM: maxAlt, widthM: num(body.widthM) ?? 40, ttlS: num(body.ttlS) ?? 600 });
     return Response.json({ corridor, granted: corridor.status === "granted" }, { status: corridor.status === "granted" ? 200 : 409 });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

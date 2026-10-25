@@ -50,10 +50,10 @@ def pick_design(designs: list[StoredDesign], preset_id: str, design_id: str | No
         hit = next((d for d in designs if d.id == design_id), None)
         if hit:
             return hit
-    based = [d for d in designs if d.based_on == preset_id]
-    if based:
-        return sorted(based, key=lambda d: d.created_at, reverse=True)[0]
-    return None
+    based = sorted((d for d in designs if d.based_on == preset_id), key=lambda d: d.created_at, reverse=True)
+    # The hangar drone as built: "(modified)" / "(server test)" copies are someone's experiments, used only if alone.
+    original = [d for d in based if "(" not in d.name]
+    return (original or based or [None])[0]
 
 
 class FlightRunner:

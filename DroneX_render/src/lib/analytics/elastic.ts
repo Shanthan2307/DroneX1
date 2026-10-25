@@ -97,3 +97,27 @@ export async function fleetStats(env: ElasticEnv, key: { designId?: string | nul
   const line = n === 0 ? "no simulated runs yet" : scored === 0 ? `${n} simulated run${n === 1 ? "" : "s"}, none finished yet` : `${clean} of ${scored} simulated runs clean${anomalous ? `; ${top}` : ""}`;
   return { design_ids: designIds, verdict, flights: n, scored, anomalous, anomalies, last_flight: lastFlight, line };
 }
+
+export interface SemanticHit {
+  id: string;
+  score: number;
+  source: Record<string, unknown>;
+}
+
+/**
+ * A plain-language question against an index's semantic_text field (`text`, embedded by the index's inference
+ * endpoint: Jina v5 on the DroneX cluster). `index` is the name after the prefix, e.g. "ardupilot-params".
+ */
+export async function semanticSearch(env: ElasticEnv, index: string, question: string, size = 3, fields: string[] = [], timeoutMs = 10_000): Promise<SemanticHit[]> {
+  const r = await fetch(`${env.url}/${env.prefix}-${index}/_search`, {
+    method: "POST",
+    headers: { authorization: `ApiKey ${env.apiKey}`, "content-type": "application/json" },
+    body: JSON.stringify({ size, query: { semantic: { field: "text", query: question } }, ...(fields.length ? { _source: fields } : {}) }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!r.ok) throw new Error(`Elastic answered ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const j = (await r.json()) as { hits: { hits: { _id: string; _score: number; _source: Record<string, unknown> }[] } };
+  return j.hits.hits.map((h) => ({ id: h._id, score: h._score, source: h._source }));
+}
+
+export { quote as esqlString };

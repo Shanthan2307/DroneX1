@@ -24,7 +24,7 @@ dronex.DOMAIN {
 
 	# Agent-only configurator routes: the agents call 127.0.0.1:3000 directly with the x-dronex-agent token, so
 	# these are never needed from the internet. The routes check the token too; this is defence in depth.
-	@agentonly path /api/sim/refly/* /api/sim/stop/* /api/airspace/mission /api/airspace/mission/* /api/sim/designs /api/sim/designs/
+	@agentonly path /api/sim/refly/* /api/sim/stop/* /api/airspace/mission /api/airspace/mission/* /api/sim/designs /api/sim/designs/ /api/scenarios/install
 	respond @agentonly 404
 	@vehpost {
 		method POST

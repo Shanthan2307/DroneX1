@@ -112,13 +112,26 @@ export class Daemon {
     }
   }
 
-  call<T = unknown>(method: string, params: unknown = {}): Promise<T> {
+  /** One request. Times out (default 15 s) so a connection that went quiet fails instead of hanging the caller. */
+  call<T = unknown>(method: string, params: unknown = {}, timeoutMs = 15_000): Promise<T> {
     if (this.closed) return Promise.reject(this.closed);
     const id = this.next++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, method });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`${method}: no answer from the simulation engine in ${timeoutMs / 1000} s`));
+      }, timeoutMs);
+      const done = <A extends unknown[]>(fn: (...a: A) => void) => (...a: A) => {
+        clearTimeout(timer);
+        fn(...a);
+      };
+      this.pending.set(id, { resolve: done(resolve as (v: unknown) => void), reject: done(reject), method });
       this.socket.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
     });
+  }
+
+  get isClosed(): boolean {
+    return this.closed !== null;
   }
 
   close() {

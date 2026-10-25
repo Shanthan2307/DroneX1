@@ -848,6 +848,13 @@ elastic.co/search-labs/blog/agent-builder-elastic-ga · github.com/elastic/agent
 
 ---
 
+
+**Embeddings, measured (2026-10-25).** The knowledge indices embed with Jina (`jina-embeddings-v5-text-small`
+through the Elastic Inference Service). On 21 real questions against the 5,799 ArduCopter parameters it found the
+right one in the top three 62% of the time, against 24% for ELSER and 14% for keyword search; it is the only setup
+that answers questions in other languages and questions worded without the manual's terms. Adding the Jina reranker
+helps other languages (75%) at 2.6× the latency. Details and the re-runnable script: `DroneX_live/elastic/README.md`.
+
 ## Bright Data: unlock, find and fetch the datasheets
 
 **Challenge:** Best use of Bright Data. 1st $1,500 in Bright Data credits and a $500 Amazon card; 2nd $1,000 and

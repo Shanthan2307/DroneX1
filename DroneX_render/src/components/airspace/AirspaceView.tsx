@@ -42,6 +42,7 @@ const snapshotOf = (s: Store): Snapshot => ({
   byId: new Map(s.vehicles),
 });
 
+const STALE_US = 10 * 60 * 1_000_000; // how long an offline drone stays on the map
 const M_PER_DEG_LAT = 111_320; // WGS-84 mean metres per degree of latitude: a projection constant, not a dataset value
 
 interface Frame {
@@ -124,6 +125,19 @@ export default function AirspaceView() {
   const store = useRef<Store>(emptyStore());
   const connRef = useRef<DbConnection | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [showOld, setShowOld] = useState(false);
+  // The clock starts at 0 and is read only in the effect: the page is prerendered, where reading the time during
+  // render is not allowed (cacheComponents). Until the first tick nothing is hidden.
+  const [nowUs, setNowUs] = useState(0);
+  useEffect(() => {
+    const tick = () => setNowUs(Date.now() * 1000);
+    const first = setTimeout(tick, 0);
+    const t = setInterval(tick, 30_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, []);
   const [points, setPoints] = useState<{ lat: number; lon: number }[]>([]);
   const [band, setBand] = useState<{ min: number; max: number }>({ min: 30, max: 60 });
   const [width, setWidth] = useState(40);
@@ -137,8 +151,12 @@ export default function AirspaceView() {
   // while Maincloud wakes a paused database. The store is emptied first: the new subscription re-inserts every row.
   useEffect(() => {
     const s = store.current;
-    const bump = () => setData(snapshotOf(s));
+    // React mounts effects twice in development: a connection this effect has already closed (or replaced) still
+    // reports, so only the current one may change what the page shows.
     let stopped = false;
+    const bump = () => {
+      if (!stopped) setData(snapshotOf(s));
+    };
     let attempt = 0;
     let generation = 0; // callbacks from a replaced connection are ignored
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -167,12 +185,14 @@ export default function AirspaceView() {
           watchTables(c, s, bump);
           c.subscriptionBuilder()
             .onApplied(() => {
+              if (!current()) return;
               attempt = 0;
               setState("live");
               setError(null);
               bump();
             })
             .onError((ctx) => {
+              if (!current()) return;
               setState("error");
               setError(ctx.event instanceof Error ? ctx.event.message : "subscription failed");
             })
@@ -205,7 +225,12 @@ export default function AirspaceView() {
     return () => ro.disconnect();
   }, []);
 
-  const { vehicles, positions, corridors, incidents, missions, byId } = data;
+  const { vehicles: allVehicles, positions: allPositions, corridors, incidents, missions, byId } = data;
+  // Drones that went offline more than ten minutes ago are history: kept in the tables, hidden here unless asked.
+  const vehicles = showOld ? allVehicles : allVehicles.filter((v) => v.presence === "online" || v.updatedAtUs >= nowUs - STALE_US);
+  const hidden = allVehicles.length - vehicles.length;
+  const shownIds = new Set(vehicles.map((v) => v.id));
+  const positions = allPositions.filter((p) => shownIds.has(p.vehicleId));
 
   // The frame: centred on the vehicles (and corridor ends), scaled so everything fits with room to click around.
   const frame = useMemo<Frame | null>(() => {
@@ -341,6 +366,11 @@ export default function AirspaceView() {
         <section>
           <h3 style={{ margin: "0 0 6px", fontSize: 12, textTransform: "uppercase", letterSpacing: 1, color: "#9aa3b2" }}>Vehicles</h3>
           {vehicles.length === 0 && <div style={{ color: "#4b5263" }}>none</div>}
+          {hidden > 0 || showOld ? (
+            <button type="button" onClick={() => setShowOld((v) => !v)} style={{ background: "transparent", border: "none", color: "#9aa3b2", cursor: "pointer", padding: "0 0 6px", fontSize: 12 }}>
+              {showOld ? "Hide drones offline for over 10 min" : `Show ${hidden} drone${hidden === 1 ? "" : "s"} offline for over 10 min`}
+            </button>
+          ) : null}
           {vehicles.map((v) => {
             const m = missions.get(v.id);
             return (

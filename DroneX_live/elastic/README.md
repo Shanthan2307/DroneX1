@@ -26,7 +26,7 @@ Where Elastic is used (also in the app's "Built with" sidebar):
 | `dronex-flights` | flight = one vehicle-online … vehicle-offline span | `flight_id` = `<vehicle id>:<online time µs>`, `started_at`, `ended_at`, `status` |
 | `dronex-flight-scores` | finished flight | drain vs estimate, `battery_sag_ratio`, `ekf_variance_peak`, `gps_dropouts`, `brake_events`, `anomalies`, `anomalous`, `scored_by` |
 | `dronex-verdicts` | design × mission | `ready`, `failing_checks`, `summary.*`, `build.*` (from the physics code via `/api/catalog` and `/api/verdict`) |
-| `dronex-ardupilot-params` | ArduCopter parameter (6,036) | `name`, `documentation`, `range`, `units`, `values`, `text` (semantic_text) |
+| `dronex-ardupilot-params` | ArduCopter parameter (5,799) | `name`, `documentation`, `range`, `units`, `values`, `text` (semantic_text) |
 | `dronex-catalog-notes` | dataset record (53) | `notes`, `source`, `numbers.*`, `text` (semantic_text) |
 | `dronex-formulas` | exported physics function with a comment | `function_name`, `comment`, `text` (semantic_text) |
 
@@ -81,3 +81,24 @@ npx tsx src/elastic/query.ts esql "FROM dronex-flights | LIMIT 5"
 
 `npx vitest run` in `DroneX_live`: parameter XML parsing, note and formula extraction, document shapes, flight
 spans, scoring and anomaly rules, verdict documents. No cluster needed.
+
+## Which embedding model, measured
+
+`scripts/eval-embeddings.ts` asks 21 questions a builder or pilot would ask (14 English, 4 in Spanish, German,
+Hindi and Chinese, 3 worded with no keyword in common with the parameter docs) against the 5,799 ArduCopter
+parameters, each with the parameter(s) that answer it, and builds temporary copies of the index for the other
+setups. Results on 2026-10-25 (hit@3: the right parameter in the top three):
+
+| Setup | hit@1 | hit@3 | MRR | other languages hit@3 | no shared keywords hit@3 | median latency |
+|---|---|---|---|---|---|---|
+| BM25 keyword search | 5% | 14% | 0.09 | 0% | 0% | 3 ms |
+| **Jina v5 text-small (the default)** | **43%** | **62%** | 0.52 | 50% | **33%** | 51 ms |
+| Jina v5 text-nano | 14% | 33% | 0.30 | 50% | 0% | 42 ms |
+| ELSER v2 | 19% | 24% | 0.24 | 0% | 0% | 50 ms |
+| Jina v5 small + BM25 combined | 33% | 43% | 0.43 | 50% | 0% | 56 ms |
+| Jina v5 small + Jina reranker v3 | 43% | 57% | **0.54** | **75%** | 0% | 133 ms |
+
+Jina v5 text-small stays: 2.6× ELSER's hit@3 and the only setup that answers questions phrased without the docs'
+words; ELSER is English-only. The reranker helps other languages but costs 2.6× the latency and loses elsewhere.
+21 questions is small: read differences under ~10 points as noise. Re-run with `npx tsx scripts/eval-embeddings.ts`.
+

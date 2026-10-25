@@ -11,16 +11,11 @@ import { isAgent, requireAgent } from "@/lib/agentAuth";
 import { mayActOn } from "@/lib/ownership";
 import { limitRequest } from "@/lib/rateLimit";
 import { runTool } from "@/lib/ai/intent";
-import { findPlace, listVehicles, telemetry, withCore, type Telemetry } from "@/lib/sim/tools";
+import { isReady } from "@/lib/sim/ready";
+import { findPlace, listVehicles, telemetry, withCore } from "@/lib/sim/tools";
 
 const TOOLS = new Set(["status", "takeoff", "goto_place", "set_mode", "return_to_launch", "land", "arm", "disarm"]);
 
-const isReady = (t: Telemetry): boolean => {
-  if (t.latitudeDeg === null || t.longitudeDeg === null) return false;
-  if (t.gpsSatellites !== null && t.gpsSatellites < 6) return false;
-  if (t.gpsFix && /no|none|2d/i.test(t.gpsFix)) return false;
-  return t.ekfStatus === null || /good/i.test(t.ekfStatus);
-};
 
 const fail = (e: unknown, status = 502) => {
   const message = e instanceof Error ? e.message : String(e);

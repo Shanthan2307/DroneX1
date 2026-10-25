@@ -4,7 +4,8 @@
 // Agent-only (x-dronex-agent); goes through the same simulator cap as a Fly, within the agents' share.
 import { connection } from "next/server";
 import { requireAgent } from "@/lib/agentAuth";
-import { flyDesign, modelBookmarkUrl, type SimProfile } from "@/lib/sim/fly";
+import type { Place } from "@/lib/sim/fly";
+import { reflyDesign } from "@/lib/sim/refly";
 import { reserveSim, SIM_FULL } from "@/lib/sim/sims";
 import { readFlight } from "@/lib/sim/store";
 import { configuratorOrigin } from "@/lib/publicUrls";
@@ -15,10 +16,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const denied = requireAgent(request);
   if (denied) return denied;
   const { id } = await params;
-  const flight = await readFlight(id);
-  if (!flight) return Response.json({ error: "no such design" }, { status: 404 });
-  const profile = flight.profile as SimProfile;
+  if (!(await readFlight(id))) return Response.json({ error: "no such design" }, { status: 404 });
   const origin = configuratorOrigin(request);
+  // Optional body {place: {latitudeDeg, longitudeDeg, headingDeg}}: start there instead of the default spot.
+  const body = (await request.json().catch(() => ({}))) as { place?: Place };
   let slot;
   try {
     slot = await reserveSim({ ip: clientIp(request.headers), agent: true });
@@ -28,10 +29,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (!slot) return Response.json({ error: SIM_FULL }, { status: 503 });
   try {
-    const flown = await flyDesign(id, profile, { modelUrl: modelBookmarkUrl(origin, id, profile), openUrl: `${origin}/?sim=${id}` });
+    const flown = await reflyDesign(id, origin, body.place ?? null);
+    if (!flown) return Response.json({ error: "no such design" }, { status: 404 });
     slot.commit(flown);
-    const design = flight.design as { name?: string };
-    return Response.json({ id, name: design.name ?? profile.name, ...flown });
+    return Response.json(flown);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[dronex sim] refly", id, message);

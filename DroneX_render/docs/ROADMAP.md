@@ -75,6 +75,12 @@ real work and is named on screen (the "Built with" sidebar, `src/lib/tracks.ts`)
   Payment Protocol as a bonus (testnet FET, checked on chain before the flight). The `/dispatch` page shows the
   agents, their addresses and whether ASI:One can reach the dispatcher (`/api/dispatch`).
 
+- **Track scenarios** at `/scenarios`: one runnable story per sponsor technology, each a real mission in the
+  simulator (plans named "DroneX · <track> · …" in its plan library) plus the steps that make the technology do its
+  work: crossing corridors refused and re-granted by the SpacetimeDB reducer, a flight investigated in Elastic (ES|QL
+  over telemetry and verdicts, Jina semantic search over the ArduPilot manual), a patrol flown by voice through
+  Cartesia, a request dispatched by the Fetch.ai agents through Agentverse. `src/lib/scenarios/`.
+
 Dependencies added for this phase, with the human's approval: `openai`, `@cartesia/cartesia-js`, `spacetimedb`
 (configurator); `spacetimedb`, `@elastic/elasticsearch`, `tsx`, `vitest` (live layer); `uagents`, `openai`,
 `httpx`, `python-dotenv`, `pytest` (agents). The verdict stays code; no model computes a number.
