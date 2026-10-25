@@ -6,7 +6,8 @@
 //      the voice copilot keeps /api/copilot/intent, where the model picks the tool.
 import { connection } from "next/server";
 import { runTool } from "@/lib/ai/intent";
-import { findPlace, listVehicles, telemetry, withCore, type Telemetry } from "@/lib/sim/tools";
+import { isReady } from "@/lib/sim/ready";
+import { findPlace, listVehicles, telemetry, withCore } from "@/lib/sim/tools";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -16,12 +17,6 @@ const CORS = {
 
 const TOOLS = new Set(["status", "takeoff", "goto_place", "set_mode", "return_to_launch", "land", "arm", "disarm"]);
 
-const isReady = (t: Telemetry): boolean => {
-  if (t.latitudeDeg === null || t.longitudeDeg === null) return false;
-  if (t.gpsSatellites !== null && t.gpsSatellites < 6) return false;
-  if (t.gpsFix && /no|none|2d/i.test(t.gpsFix)) return false;
-  return t.ekfStatus === null || /good/i.test(t.ekfStatus);
-};
 
 const fail = (e: unknown, status = 502) => {
   const message = e instanceof Error ? e.message : String(e);

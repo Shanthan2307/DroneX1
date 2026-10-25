@@ -1,7 +1,7 @@
 // POST /api/airspace/mission: record which agent gave which vehicle which mission, and where it stands
 // (proposed, accepted, flying, done, failed, released). The Dispatch agents coordinate through this table.
 import { connection } from "next/server";
-import { toMission, waitFor, withAirspace } from "@/lib/airspace/client";
+import { assignMission } from "@/lib/airspace/actions";
 import type { MissionRequest } from "@/lib/airspace/types";
 import { CORS } from "../route";
 
@@ -19,14 +19,7 @@ export async function POST(request: Request) {
   const status = typeof body.status === "string" && body.status ? body.status : "proposed";
   if (!vehicleId || !missionId) return Response.json({ error: "vehicleId and missionId are required" }, { status: 400, headers: CORS });
   try {
-    const mission = await withAirspace(async (air) => {
-      await air.conn.reducers.assignMission({ vehicleId, missionId, agent, status });
-      const row = await waitFor(
-        () => [...air.conn.db.missionAssignment.iter()].find((m) => m.vehicleId === vehicleId),
-        (m) => m.missionId === missionId && m.status === status,
-      );
-      return toMission(row);
-    });
+    const mission = await assignMission({ vehicleId, missionId, agent, status });
     return Response.json({ mission }, { headers: CORS });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

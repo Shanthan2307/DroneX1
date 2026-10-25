@@ -2,8 +2,8 @@
 // profile are in the store) as a new simulated vehicle, without a browser to export the model. The Dispatch flight
 // agent uses this: the hangar drones are packed once from the configurator, then flown on request from ASI:One.
 import { connection } from "next/server";
-import { flyDesign, modelBookmarkUrl, type SimProfile } from "@/lib/sim/fly";
-import { readFlight } from "@/lib/sim/store";
+import type { Place } from "@/lib/sim/fly";
+import { reflyDesign } from "@/lib/sim/refly";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -14,14 +14,13 @@ const CORS = {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  const flight = await readFlight(id);
-  if (!flight) return Response.json({ error: "no such design" }, { status: 404, headers: CORS });
-  const profile = flight.profile as SimProfile;
   const origin = new URL(request.url).origin;
+  // Optional body {place: {latitudeDeg, longitudeDeg, headingDeg}}: start there instead of the default spot.
+  const body = (await request.json().catch(() => ({}))) as { place?: Place };
   try {
-    const flown = await flyDesign(id, profile, { modelUrl: modelBookmarkUrl(origin, id, profile), openUrl: `${origin}/?sim=${id}` });
-    const design = flight.design as { name?: string };
-    return Response.json({ id, name: design.name ?? profile.name, ...flown }, { headers: CORS });
+    const flown = await reflyDesign(id, origin, body.place ?? null);
+    if (!flown) return Response.json({ error: "no such design" }, { status: 404, headers: CORS });
+    return Response.json(flown, { headers: CORS });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("[dronex sim] refly", id, message);

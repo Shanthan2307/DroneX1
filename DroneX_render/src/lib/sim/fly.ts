@@ -31,7 +31,7 @@ interface Vehicle {
   name: string;
 }
 
-interface Place {
+export interface Place {
   latitudeDeg: number;
   longitudeDeg: number;
   headingDeg: number;
@@ -84,13 +84,14 @@ export interface FlyResult {
  * the UI draws the design the moment it opens. Parameters are written in the background (they need the
  * vehicle's parameter download first, which takes a while) and only logged.
  */
-export async function flyDesign(id: string, profile: SimProfile, { modelUrl, openUrl }: { modelUrl: string; openUrl: string }): Promise<FlyResult> {
+export async function flyDesign(id: string, profile: SimProfile, { modelUrl, openUrl, place: at }: { modelUrl: string; openUrl: string; place?: Place | null }): Promise<FlyResult> {
   const daemon = await readDaemon();
   const client = await CoreClient.connect(daemon.socket);
   let keep = false;
   try {
     const { vehicles: before } = await client.call<{ vehicles: Vehicle[] }>("vehicle/list", {});
-    const place = startPlace(profile.vehicle, before.filter((v) => v.presence === "online").length);
+    // A scenario names its own start (its story happens there); otherwise the default spot, crowded east.
+    const place = at ?? startPlace(profile.vehicle, before.filter((v) => v.presence === "online").length);
     const ground = await groundHeight(client, place);
     const link = await client.call<Link>("sim/start", {
       vehicle: profile.vehicle,

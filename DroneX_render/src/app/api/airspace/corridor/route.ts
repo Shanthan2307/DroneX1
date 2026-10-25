@@ -2,8 +2,7 @@
 // home, for a while). The SpacetimeDB reducer grants it or refuses it atomically against every corridor held by
 // another vehicle; the answer row (status, reason) is returned once it arrives in the subscription.
 import { connection } from "next/server";
-import { randomUUID } from "node:crypto";
-import { toCorridor, waitFor, withAirspace } from "@/lib/airspace/client";
+import { requestCorridor } from "@/lib/airspace/actions";
 import type { CorridorRequest } from "@/lib/airspace/types";
 import { CORS } from "../route";
 
@@ -25,29 +24,9 @@ export async function POST(request: Request) {
   if (!vehicleId || num(from.lat) === null || num(from.lon) === null || num(to.lat) === null || num(to.lon) === null || minAlt === null || maxAlt === null) {
     return Response.json({ error: "vehicleId, from {lat, lon}, to {lat, lon}, minAltM and maxAltM are required" }, { status: 400, headers: CORS });
   }
-  const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId : randomUUID();
-  const widthM = num(body.widthM) ?? 40;
-  const ttlS = Math.round(num(body.ttlS) ?? 600);
+  const requestId = typeof body.requestId === "string" && body.requestId ? body.requestId : undefined;
   try {
-    const corridor = await withAirspace(async (air) => {
-      await air.conn.reducers.requestCorridor({
-        requestId,
-        vehicleId,
-        fromLat: from.lat,
-        fromLon: from.lon,
-        toLat: to.lat,
-        toLon: to.lon,
-        minAlt,
-        maxAlt,
-        widthM,
-        ttlS: BigInt(ttlS),
-      });
-      const row = await waitFor(
-        () => [...air.conn.db.corridor.iter()].find((c) => c.requestId === requestId),
-        () => true,
-      );
-      return toCorridor(row);
-    });
+    const corridor = await requestCorridor({ requestId, vehicleId, from, to, minAltM: minAlt, maxAltM: maxAlt, widthM: num(body.widthM) ?? 40, ttlS: num(body.ttlS) ?? 600 });
     return Response.json({ corridor, granted: corridor.status === "granted" }, { status: corridor.status === "granted" ? 200 : 409, headers: CORS });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
