@@ -1,6 +1,36 @@
-# DroneX
+<div align="center">
 
-**Design a drone from real parts, know whether it flies before you print it, then fly it over a real city.**
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/dronex-logo-light.png">
+  <img src="docs/images/brand/dronex-logo.png" alt="DroneX" width="440">
+</picture>
+
+<h3>Design a drone from real parts. Know it flies before you print it. Then fly it over a real city.</h3>
+
+<p>
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-000000?style=flat-square&logo=nextdotjs&logoColor=white">
+  <img alt="three.js" src="https://img.shields.io/badge/three.js-r180-000000?style=flat-square&logo=threedotjs&logoColor=white">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-daemon-B7410E?style=flat-square&logo=rust&logoColor=white">
+  <img alt="ArduPilot SITL" src="https://img.shields.io/badge/ArduPilot-SITL-1A8DB8?style=flat-square">
+  <br>
+  <img alt="Cartesia" src="https://img.shields.io/badge/Cartesia-voice-1A8DB8?style=flat-square">
+  <img alt="Fetch.ai" src="https://img.shields.io/badge/Fetch.ai-agents-1A8DB8?style=flat-square">
+  <img alt="SpacetimeDB" src="https://img.shields.io/badge/SpacetimeDB-airspace-1A8DB8?style=flat-square">
+  <img alt="Elastic" src="https://img.shields.io/badge/Elastic-analytics-1A8DB8?style=flat-square&logo=elastic&logoColor=white">
+</p>
+
+<p>
+  <a href="#what-you-can-do">Features</a> ·
+  <a href="#try-it-a-two-minute-demo-that-really-works">Demo</a> ·
+  <a href="#how-it-works">Architecture</a> ·
+  <a href="#run-it">Run it</a> ·
+  <a href="docs/DEPLOY.md">Deploy</a> ·
+  <a href="#documentation">Docs</a>
+</p>
+
+</div>
+
+---
 
 DroneX is a drone configurator and a flight simulator joined into one flow. You build a drone part by part from
 sourced, real-world components; physics in code (never a language model) tells you whether it can fly a mission;
@@ -192,6 +222,7 @@ DroneX_agents/.venv/bin/python -m pytest DroneX_agents                 # 35 test
 - [`DroneX_agents/README.md`](DroneX_agents/README.md): DroneX Dispatch, pairing with Agentverse, testing through ASI:One
 - [`DroneX_live/README.md`](DroneX_live/README.md): the shared airspace and the analytics
 - [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md): every technology considered, what was chosen and why, and what testing found
+- [`docs/DEPLOY.md`](docs/DEPLOY.md): the plan for taking DroneX live on a public URL
 
 ### How the configurator and the simulator connect
 
