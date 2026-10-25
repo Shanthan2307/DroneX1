@@ -205,6 +205,7 @@ DroneX_agents/.venv/bin/python -m pytest DroneX_agents                 # 35 test
 - [`DroneX_render/docs/ROADMAP.md`](DroneX_render/docs/ROADMAP.md): phases, and what is in the current one
 - [`DroneX_agents/README.md`](DroneX_agents/README.md): DroneX Dispatch, pairing with Agentverse, testing through ASI:One
 - [`DroneX_live/README.md`](DroneX_live/README.md): the shared airspace and the analytics
+- [`docs/TRACKS.md`](docs/TRACKS.md): the four technologies, one page each: the problem, what DroneX does with it, the moment to watch, and what would be missing without it
 - [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md): every technology considered, what was chosen and why, and what testing found
 
 ### How the configurator and the simulator connect
