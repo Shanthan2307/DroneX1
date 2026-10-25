@@ -1,0 +1,45 @@
+# The live-layer mirror (DroneX_live): Core telemetry -> SpacetimeDB Maincloud (shared airspace) and Elastic.
+# It exits when Core's socket or the SpacetimeDB connection drops; systemd restarts it.
+# /etc/dronex/mirror.env (Elastic writer key) is loaded after /etc/dronex/env, so its values win.
+[Unit]
+Description=DroneX live mirror (Core -> SpacetimeDB + Elastic)
+After=network-online.target dronex-core.service
+Wants=network-online.target dronex-core.service
+StartLimitIntervalSec=300
+StartLimitBurst=20
+
+[Service]
+Type=simple
+User=dronex
+Group=dronex
+WorkingDirectory=/opt/dronex/current/DroneX_live
+EnvironmentFile=/etc/dronex/env
+EnvironmentFile=/etc/dronex/mirror.env
+Environment=NODE_ENV=production
+ExecStart=/opt/dronex/current/DroneX_live/node_modules/.bin/tsx src/mirror.ts
+Restart=on-failure
+RestartSec=5
+
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dronex
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,46 @@
+# The configurator (DroneX_render, `next start`), behind Caddy as dronex.DOMAIN. Exactly one instance: the rate
+# limiter and the sim registry live in this process.
+#
+# Writable paths (item 29): DroneX_render/.dronex and .next/cache are symlinks into /var/lib/dronex made by
+# deploy/deploy.sh; .next itself is listed too (optional, '-') in case Next writes beside the cache.
+[Unit]
+Description=DroneX configurator (Next.js)
+After=network-online.target dronex-core.service
+Wants=network-online.target dronex-core.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=dronex
+Group=dronex
+WorkingDirectory=/opt/dronex/current/DroneX_render
+EnvironmentFile=/etc/dronex/env
+Environment=NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+ExecStart=/opt/dronex/current/DroneX_render/node_modules/.bin/next start -p 3000 -H 127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dronex -/opt/dronex/current/DroneX_render/.next
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

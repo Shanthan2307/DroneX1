@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Configurator (typecheck, lint, test, build, physics)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: DroneX_render
+    # Dummy public values: next build bakes these in, and production startup refuses to run without them.
+    env:
+      DRONEX_PUBLIC_URL: https://dronex.example.com
+      DRONEX_SIM_UI_URL: https://sim.example.com
+      DRONEX_MAX_SIMS: "4"
+      DRONEX_SIM_IDLE_MIN: "10"
+      DRONEX_SIM_MAX_MIN: "30"
+      DRONEX_COOKIE_SECRET: ci-cookie-secret-not-a-real-secret-0000000000
+      DRONEX_AGENT_TOKEN: ci-agent-token-not-a-real-secret-00000000000
+      SPACETIME_URI: wss://maincloud.spacetimedb.com
+      SPACETIME_DB: dronex-airspace
+      NEXT_PUBLIC_SPACETIME_URI: wss://maincloud.spacetimedb.com
+      NEXT_PUBLIC_SPACETIME_DB: dronex-airspace
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: DroneX_render/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Simulator URL is baked into the build
+        run: grep -rqF "https://sim.example.com" .next/server/app
+      - name: Physics check
+        run: node prototype/drone-assembly/scripts/check-drone-physics.mjs
+
+  backend:
+    name: Account backend and interface scripts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dronex/DroneX_1/backend/package-lock.json
+      - name: Backend tests
+        working-directory: dronex/DroneX_1/backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+      - name: Interface repoint on a copy (items 8 and 9)
+        run: |
+          set -eu
+          work="$RUNNER_TEMP/DroneX_1"
+          mkdir -p "$work"
+          cp -R dronex/DroneX_1/scripts dronex/DroneX_1/interface "$work/"
+          cd "$work"
+          V=$(cat interface/current)
+          node scripts/point-interface.mjs --from http://localhost:45103 https://sim.example.com
+          node scripts/point-interface.mjs --from http://localhost:45103 https://sim.example.com
+          node scripts/patch-interface-dronex.mjs
+          node scripts/patch-interface-tracks.mjs
+          node scripts/set-render-url.mjs https://dronex.example.com
+          node scripts/set-render-url.mjs https://dronex.example.com
+          if grep -rqF 'localhost:45103' "interface/$V"; then echo "localhost:45103 left in the bundle"; exit 1; fi
+          grep -rqF '`https://sim.example.com`' "interface/$V/assets"
+          test "$(grep -c "window.DRONEX_RENDER_URL='https://dronex.example.com'" "interface/$V/index.html")" = 1
+
+  live:
+    name: Live layer typecheck
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: DroneX_live
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: DroneX_live/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+
+  agents:
+    name: Dispatch agents (pytest)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: DroneX_agents
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: DroneX_agents/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  core:
+    name: Core (cargo test, release feature set check)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: dronex/DroneX_1/core
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries (libudev for the default gamepad feature)
+        run: sudo apt-get update -q && sudo apt-get install -y -q libudev-dev pkg-config cmake clang
+      # rustup on the runner picks up the pinned toolchain from rust-toolchain.toml.
+      - run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: dronex/DroneX_1/core
+      - name: cargo test
+        run: cargo test --locked --workspace
+      - name: Release feature set compiles (what deploy/deploy.sh builds)
+        env:
+          UXDUCK_RELEASE_PUBLIC_KEY: RWSzgl9fdAptLFtOnN956tu/GY+/ANg5Of8nZVlOBgWsZTpGzJQbMyfP
+        run: cargo check --locked --release -p uxduck --no-default-features

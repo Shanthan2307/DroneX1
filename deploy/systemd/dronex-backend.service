@@ -1,0 +1,44 @@
+# The account backend (dronex/DroneX_1/backend): map keys and place search for the 3D page, Core's UXDUCK_API_URL.
+# Loopback only (HOST=127.0.0.1 in backend.env); Caddy exposes /v1/maps/* and /v1/places* on sim.DOMAIN.
+[Unit]
+Description=DroneX account backend
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=dronex
+Group=dronex
+WorkingDirectory=/opt/dronex/current/dronex/DroneX_1/backend
+EnvironmentFile=/etc/dronex/backend.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node src/server.ts
+Restart=on-failure
+RestartSec=5
+
+# Hardening (docs/DEPLOY.md items 28, 29): the release under /opt is read-only, state lives in /var/lib/dronex.
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dronex
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

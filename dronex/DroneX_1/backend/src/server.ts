@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { openDb } from "./db.ts";
+import { browserMapKeys, geocodeKey } from "./keys.ts";
 import { consoleMailer } from "./mailer.ts";
 
 const port = Number(process.env.PORT ?? 45103);
@@ -21,9 +22,9 @@ const app = createApp({
   db: openDb(dbPath),
   mailer: consoleMailer,
   secret,
-  mapKeys: { arcgis: process.env.ARCGIS_KEY, google: process.env.GOOGLE_MAPS_KEY },
+  mapKeys: browserMapKeys(process.env),
   places: {
-    arcgisKey: process.env.ARCGIS_KEY,
+    arcgisKey: geocodeKey(process.env),
     forStorage: process.env.ARCGIS_GEOCODE_FOR_STORAGE === "true",
     perMinute: Number(process.env.PLACE_SEARCHES_PER_MINUTE ?? 60),
   },

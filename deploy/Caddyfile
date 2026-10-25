@@ -1,0 +1,85 @@
+# Caddy v2 front for DroneX. deploy/deploy.sh replaces DOMAIN with your domain, writes the result to
+# /etc/caddy/Caddyfile, runs `caddy validate` and reloads Caddy. TLS certificates come from ACME automatically,
+# so ports 80 and 443 must be open and both names must resolve to this VM.
+#
+# Rules that keep visitors from becoming operators (docs/DEPLOY.md items 1 and 5):
+#   - sim.DOMAIN goes to Core's PUBLIC guest listener (127.0.0.1:45020), never the operator listener (45010).
+#   - Host and Origin pass through unchanged. Never add `header_up Host ...` and never rewrite Origin: that would
+#     make every visitor a loopback browser.
+#   - X-Forwarded-For is set to the real peer (overwriting whatever the client sent): Core, the backend and the
+#     configurator key their per-visitor limits on it, and trust it because Caddy is the only proxy.
+#
+# For ACME expiry notices, add a global options block as the very first thing in this file:
+#   {
+#   	email you@example.com
+#   }
+
+dronex.DOMAIN {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# Agent-only configurator routes: the agents call 127.0.0.1:3000 directly with the x-dronex-agent token, so
+	# these are never needed from the internet. The routes check the token too; this is defence in depth.
+	@agentonly path /api/sim/refly/* /api/sim/stop/* /api/airspace/mission /api/airspace/mission/* /api/sim/designs /api/sim/designs/
+	respond @agentonly 404
+	@vehpost {
+		method POST
+		path /api/sim/vehicles/*
+	}
+	respond @vehpost 404
+
+	# Body caps: a packed model upload, a voice clip, and small JSON for everything else.
+	@fly path /api/sim/fly
+	request_body @fly {
+		max_size 42MB
+	}
+	@stt path /api/copilot/transcribe
+	request_body @stt {
+		max_size 11MB
+	}
+	@small not path /api/sim/fly /api/copilot/transcribe
+	request_body @small {
+		max_size 256KB
+	}
+
+	reverse_proxy 127.0.0.1:3000 {
+		# Stream server-sent events (/api/copilot/events) without buffering.
+		flush_interval -1
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+sim.DOMAIN {
+	# No COEP/COOP here: they could break the cross-origin map tiles the 3D page loads.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	# Does not limit WebSocket frames on /rpc; Core caps those itself on the public listener.
+	request_body {
+		max_size 256KB
+	}
+
+	# The page's own account-server calls (map keys, place search) go to the backend, same-origin.
+	@backend path /v1/maps/* /v1/places /v1/places/*
+	handle @backend {
+		reverse_proxy 127.0.0.1:45103 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+	# Every other backend path (/v1/auth, sync, storage, model, ...) stays private.
+	handle /v1/* {
+		respond 404
+	}
+	# Everything else, including the /rpc WebSocket upgrade, goes to Core's public guest listener.
+	handle {
+		reverse_proxy 127.0.0.1:45020 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+}

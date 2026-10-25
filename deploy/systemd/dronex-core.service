@@ -1,0 +1,63 @@
+# The simulation engine (Core, release build) and every ArduPilot SITL process it starts.
+#   - 127.0.0.1:45010  operator listener. Loopback only, NEVER proxied.
+#   - 127.0.0.1:45020  public guest listener, behind Caddy as sim.DOMAIN (--public-origin / --public-port).
+#   - unix socket in /var/lib/dronex/core (mode 700): the configurator, mirror and agents reach Core through it.
+# The binary is copied to /opt/dronex/current/bin/uxduck by deploy/deploy.sh. Never pass --dev here.
+#
+# CPUQuota, MemoryMax and TasksMax come from the drop-in /etc/systemd/system/dronex-core.service.d/limits.conf
+# (deploy/provision.sh writes conservative defaults; set real ones after sizing, see deploy/README.md). Every
+# SITL is a child of this unit, so those limits cap the whole simulator fleet.
+[Unit]
+Description=DroneX simulation engine (Core) with its SITL children
+After=network-online.target dronex-backend.service
+Wants=network-online.target dronex-backend.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=dronex
+Group=dronex
+WorkingDirectory=/var/lib/dronex/core
+EnvironmentFile=/etc/dronex/core.env
+ExecStart=/opt/dronex/current/bin/uxduck daemon \
+  --data-dir /var/lib/dronex/core \
+  --port 45010 \
+  --ui-dir /opt/dronex/current/ui \
+  --video-port off \
+  --no-update-check \
+  --no-analytics \
+  --no-gamepads \
+  --public-origin ${DRONEX_SIM_ORIGIN} \
+  --public-port ${DRONEX_SIM_PUBLIC_PORT} \
+  --sim-max-age ${DRONEX_SIM_MAX_AGE_MIN}
+Restart=on-failure
+RestartSec=5
+# Stopping Core stops every SITL in the unit's cgroup.
+KillMode=control-group
+TimeoutStopSec=30
+LimitNOFILE=65536
+
+UMask=0027
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/dronex
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
