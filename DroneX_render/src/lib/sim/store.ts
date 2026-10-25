@@ -1,7 +1,7 @@
 // Drones sent to the simulator, kept on disk so the simulation engine's map can fetch the 3D model and the
 // configurator can reopen the design: .dronex/sim/<id>/{design.json, profile.json, model.glb} in the repo
 // (gitignored). Server-only. Ids are the server's own, so a client cannot pick a path.
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 
@@ -40,3 +40,30 @@ export async function readFlight(id: string): Promise<{ design: unknown; profile
 }
 
 export const readModel = (id: string) => readIn(id, "model.glb");
+
+export interface StoredFlight {
+  id: string;
+  name: string;
+  basedOn: string | null;
+  createdAt: string;
+  profile: { vehicle: string; frame: string; span_m: number };
+}
+
+/** Every stored design, newest first; a folder without both files is skipped. */
+export async function listFlights(): Promise<StoredFlight[]> {
+  let ids: string[];
+  try {
+    ids = (await readdir(root())).filter((d) => ID_RE.test(d));
+  } catch {
+    return [];
+  }
+  const out: StoredFlight[] = [];
+  for (const id of ids) {
+    const f = await readFlight(id);
+    if (!f) continue;
+    const design = f.design as { name?: string; basedOn?: string | null; createdAt?: string };
+    const profile = f.profile as { vehicle: string; frame: string; span_m: number };
+    out.push({ id, name: design.name ?? id, basedOn: design.basedOn ?? null, createdAt: design.createdAt ?? "", profile: { vehicle: profile.vehicle, frame: profile.frame, span_m: profile.span_m } });
+  }
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}

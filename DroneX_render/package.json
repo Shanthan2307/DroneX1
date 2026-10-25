@@ -11,8 +11,10 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@cartesia/cartesia-js": "^4.2.0",
     "animejs": "^4.5.0",
     "next": "16.4.2",
+    "openai": "^7.43.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "three": "^0.180.0"

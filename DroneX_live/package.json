@@ -1,0 +1,19 @@
+{
+  "name": "dronex-live",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DroneX live layer: mirrors the simulation engine's telemetry into the shared airspace (SpacetimeDB) and the flight analytics (Elastic).",
+  "scripts": {
+    "mirror": "tsx src/mirror.ts",
+    "elastic:setup": "tsx src/elastic/setup.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^9.5.1",
+    "@types/node": "^26.6.5",
+    "spacetimedb": "^2.13.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
