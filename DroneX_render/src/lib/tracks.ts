@@ -71,8 +71,10 @@ export const TRACKS: Track[] = [
     uses: [
       { surface: "agents", what: "The Dispatcher parses intent, asks for missing facts with a form card, shows candidates in a carousel, the physics verdict in a review card.", where: "DroneX_agents/dronex_agents/dispatcher.py" },
       { surface: "agents", what: "Fleet agents answer capability queries from the physics verdict and mission matrix served by the configurator.", where: "DroneX_agents/dronex_agents/fleet.py" },
-      { surface: "agents", what: "The flight agent starts the design in the simulator, writes its parameters, routes around buildings and takes off through Core RPC.", where: "DroneX_agents/dronex_agents/flight.py" },
-      { surface: "configurator", what: "The catalog, verdict and refly routes exist for the agents: the same numbers the configurator shows, as JSON.", where: "DroneX_render/src/app/api/catalog/route.ts" },
+      { surface: "agents", what: "The flight agent starts the design in the simulator, waits for GPS and EKF, takes off, reserves a corridor in the shared airspace and flies to the place, through the engine's tools directly.", where: "DroneX_agents/dronex_agents/flight.py" },
+      { surface: "agents", what: "Agent Payment Protocol: the flight agent quotes each simulated flight, the dispatcher pays in testnet FET and the flight agent checks the transaction on chain before it flies.", where: "DroneX_agents/dronex_agents/payment.py" },
+      { surface: "configurator", what: "The catalog, verdict, refly and vehicle routes exist for the agents: the same numbers the configurator shows, as JSON.", where: "DroneX_render/src/app/api/sim/vehicles/[id]/route.ts" },
+      { surface: "configurator", what: "The Dispatch page shows the agents, their addresses, whether ASI:One can reach the dispatcher, and sentences to try.", where: "DroneX_render/src/app/dispatch/page.tsx" },
     ],
     docs: "https://uagents.fetch.ai/docs",
   },
