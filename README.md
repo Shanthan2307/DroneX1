@@ -2,202 +2,201 @@
 
 **Design a drone from real parts, know whether it flies before you print it, then fly it over a real city.**
 
-DroneX is two engines stitched into one flow. A rendering engine where you build a drone part by part from
-sourced, real-world components and get a verdict computed by physics, not by a model. And a simulation engine
-where that exact drone, every arm and propeller of it, flies on ArduPilot's own flight code over photorealistic
-3D tiles of a real place, with real buildings in its way.
+DroneX is a drone configurator and a flight simulator joined into one flow. You build a drone part by part from
+sourced, real-world components; physics in code (never a language model) tells you whether it can fly a mission;
+an assistant you can talk to explains every part and suggests the swap that fixes a failing check; and one
+button puts that exact drone in the air on ArduPilot's own flight code over photorealistic 3D tiles of San
+Francisco, with solid buildings in its way.
+
+![Ask DroneX on the configurator: the assistant explains why the drone fails the sprint mission and offers the motor swap that clears it](docs/images/ask-dronex.png)
 
 ---
 
-## The story
+## What you can do
 
-Drones have quietly become one of the most important autonomous vehicles in the world.
+| | |
+|---|---|
+| **Build** | Pick a real drone from the Hangar (8 presets, from a 5-inch freestyle quad to a VTOL mapper), build it part by part in 3D, explode it, click any part to see what it does and where every number comes from. |
+| **Ask** | **Ask DroneX** (top right): hold to talk or type. "What does this battery do?", "Why does it fail the medical mission?", "What should I change?". The answer is spoken, every number in it comes from the dataset or the physics, and a swap the physics has passed comes back as a button that changes the drone. |
+| **Test** | Swap motors, propellers, batteries, payloads and airframes with compatibility checks, then test against six missions (sub-250 g urban scan, 15 km medical delivery, 40 min search and rescue, 160 km/h sprint, 10 km long-range, crop survey). Pass or fail per requirement, with the reason. |
+| **Fly** | **Fly in simulation** sends the exact drone to the simulator: its battery, hover throttle and airspeeds become ArduPilot parameters, its 3D model flies on the map. Arm, take off, go to a landmark, fly a mission. |
+| **Talk to it in the air** | The **Copilot** page (`/copilot`): spoken commands ("take off to thirty metres") and spoken callouts (GPS, arming, altitude bands, battery), beside a live map of the shared airspace. |
+| **Dispatch from ASI:One** | **DroneX Dispatch**: say the job in ASI:One ("run a 160 km/h sprint over 2 km, back in 5 minutes"); agents find a hangar drone that passes, show the verdict, and on approval fly it in the simulator. |
 
-They defend borders. They carry Walmart orders to doorsteps. They launch at a 911 call and arrive before the
-ambulance does, streaming what the dispatcher needs to know. They fly over fields that no longer have enough
-hands to walk them, spotting disease and dry rows while labour shortages grow and AI gets better at reading
-what the camera sees.
+## Try it: a two-minute demo that really works
 
-And then something changed. The hardware went open.
+1. Open `http://localhost:3000/?build=apex-5-urban-light` and press **Build all**.
+2. Press **Test** and choose **FPV sprint** (or ask the assistant to "switch to the sprint mission"). The HUD
+   says it does not pass.
+3. Open **Ask DroneX** and ask (or hold to talk): *"Can it fly the sprint mission? If not, what should I change?"*
+   It answers that lift is 3.41× the weight where the mission needs 4.50×, and endurance is 4.7 of 5.0 minutes,
+   and offers **Use T-Motor F60 Pro IV V2.0**.
+4. Press the button. The motors swap on the pad and the HUD reads **CLEARED**: lift 6.85×, 5.0 minutes.
+5. Ask *"What does the motor do?"* to hear why: KV, rpm per volt, propeller size, weight per arm.
+6. Press **Fly in simulation**. The same drone appears on a San Francisco pier. Open `/copilot`, hold to talk:
+   *"Take off to thirty metres."* Then *"Go to Coit Tower."*
 
-Today anyone with a 3D printer, an ArduPilot or PX4 flight controller, and a weekend can print an airframe,
-bolt on motors, flash open-source firmware, and have a working aircraft. Not a toy. A vehicle that can carry a
-camera, a sensor, a package. A small town can print its own fire-watch drone. A rural clinic can print a
-courier for blood samples. A farm cooperative in Kenya can print a mapper instead of waiting for an import.
-The purpose is found locally; the design is shared globally.
-
-That is the promise. Here is what actually happens.
-
-## The problem
-
-**Printing is slow, and failure is expensive.**
-A 3D-printed airframe takes hours to print and a day to cure, sand and assemble. If the motor is too weak for
-the propeller, or the battery too heavy for the frame, you find out at the first hover attempt, with the
-aircraft on its back in the grass. Then you print again. Each iteration costs a day and a spool of filament.
-
-**You cannot bend plastic back into shape.**
-Metal prototypes can be re-cut, re-drilled, re-welded. A printed part that is wrong is scrap. Melting it down
-is not a real recycling path for most filaments; it goes in the bin. Debugging by printing is debugging by
-throwing things away.
-
-**There is no test drive.**
-A car buyer drives before buying. A drone builder prints, assembles, and hopes. There is no way to take a
-schematic, put it in the air, and watch what it does in wind, over terrain, between buildings, on a mission
-with a real payload, before a single gram is printed.
-
-**The numbers are scattered or made up.**
-Motor thrust tables live on one manufacturer's site, propeller coefficients on a forum, battery discharge
-ratings on a label. Most builders guess. Many online calculators invent constants. A wrong guess is a crash.
-
-**The design and the flight live in different worlds.**
-CAD on one screen. A flight simulator, if any, on another, flying a stock quadcopter that looks nothing like
-what you built and weighs nothing like it. There is no path from "this is my drone" to "this is my drone
-flying."
-
-For a hobbyist this is a frustrating weekend. For a clinic that printed its only courier, or a farm that
-budgeted for one airframe, it is the difference between the programme working and the programme being
-abandoned.
-
-## The solution
-
-DroneX closes the loop between design and flight, with no printing in between.
-
-**1. Build from real parts, with their sources.**
-The Hangar holds real drones: a 5-inch freestyle quad, an urban light quad, a medical courier, a 3D-printed
-fixed-wing scout, a cinewhoop, a 7-inch long-range quad, a folding hexacopter, a 4+1 VTOL quadplane. Every
-motor, propeller, battery, airframe and payload is a dataset record with a source. You build the drone part by
-part in 3D, explode it, click any part and see what it does and where its numbers come from. Unknown values
-say so. Nothing is invented.
-
-**2. Swap parts and get a verdict from physics.**
-Change the motor, the propeller, the pack, the payload. Compatibility is checked as you pick. The verdict is
-computed in code from standard formulas over the dataset: all-up weight, thrust per motor, hover
-thrust-to-weight, hover power and current, endurance, range, discharge margin, wing loading. Every computed
-number is labelled as an estimate. Then test the build against missions: a sprint, an urban survey, a medical
-delivery, a mapping run. Pass or fail, per requirement, with the reason.
-
-**3. Press Fly in simulation. Your drone, not a stand-in.**
-One button. The exact drone on the pad is packed as a miniature in true metres, every propeller a named part,
-and sent to the simulation engine. The browser follows. Your drone appears on a photorealistic 3D map of a
-real place, as a simulated vehicle running ArduPilot's real flight code. Its battery capacity, hover throttle
-and airspeeds come from your design. You arm it, take off, send it somewhere, change modes, fly a mission,
-drive it from the keyboard, ask the AI assistant what the telemetry means.
-
-**4. Buildings are solid.**
-The simulator only knows the ground, so DroneX taught it the city. Building outlines and heights come from
-OpenStreetMap. A copter about to fly into a wall is stopped. A Go to is planned around the buildings taller
-than it flies, or over them with a gentle climb. A mission leg through a building gets a warning and a
-one-click reroute. This is where a design proves it can do the job, not just that it can hover.
-
-**5. Bring it back and change it.**
-The simulated vehicle carries a link back to its design. Something wrong? Open it in the configurator, swap the
-part, fly again. Minutes, not days. No filament.
-
-Only when the design survives the simulation do you print it. Once.
-
-## Who this is for
-
-- **The rural clinic** that needs one courier drone to work the first time.
-- **The farm cooperative** choosing between a quad and a fixed wing for a 40-hectare survey, with the battery
-  it can actually buy.
-- **The volunteer fire department** sizing a payload for a thermal camera and a 20-minute loiter.
-- **The student** who has a printer, a flight controller and no budget for a second airframe.
-- **The engineer at a logistics or defence contractor** who wants to iterate a schematic against a real
-  mission profile before committing a fabrication run.
-
-## Pros and cons, honestly
-
-### What DroneX gives you
-
-- **Zero-cost iteration.** Swap a part and refly in under a minute. Each avoided reprint saves a day and a
-  spool.
-- **Real numbers, with receipts.** Every value traces to a datasheet or a named formula. The verdict is
-  deterministic code, never a language model's opinion.
-- **The real autopilot.** The simulation runs ArduPilot's own firmware in software-in-the-loop, so modes,
-  failsafes, mission logic and parameters behave as they will on the bench.
-- **A real place.** Photorealistic 3D tiles, terrain, and solid buildings. You test the mission, not just the
-  hover.
-- **Your drone, visibly.** The thing flying on the map is the thing you built, in true scale, propellers
-  spinning with the motor outputs.
-- **Open stack.** Open datasets, open flight code, open simulation core. Fork it, extend it, run it on a laptop
-  in a town with no cloud.
-- **One flow.** Landing page to flying vehicle with no export, no import, no file juggling.
-
-### What it does not do yet
-
-- **Airframe dynamics are ArduPilot's standard frames.** Your design sets the battery model, hover throttle and
-  airspeeds. Mass distribution and motor thrust curves are not yet fed into the simulator's physics. A design
-  that is badly out of balance will fly better in simulation than on the bench.
-- **No structural or aerodynamic analysis.** DroneX will not tell you a printed arm will snap, or that a wing
-  will flutter. It tells you whether the propulsion and energy budget closes.
-- **Building avoidance is for multicopters.** Planes and VTOLs cannot brake in front of a wall, and in guided
-  flight they circle their target, so they fly straight today. Routing them over buildings is the next piece of
-  work.
-- **Wind and weather are the simulator's defaults.** Set them as ArduPilot parameters; there is no weather
-  picker yet.
-- **Simulation starts at a fixed place.** San Francisco by default, overridable by environment variables, not
-  yet by clicking the map.
-- **A desktop with a GPU helps.** Two 3D engines and a flight simulator are running at once.
-
-## The demo, in one breath
-
-Open the landing page. Dive from orbit to the pad. Pick the medical courier. Swap its battery for a bigger
-one, watch the weight go up and the endurance go up with it. Run the delivery mission: pass. Press Fly in
-simulation. Watch the same drone, same orange props, appear on a San Francisco pier. Take off. Send it across
-the water toward downtown. Watch it climb and go around the towers on its own. Bring it home. Open it back in
-the configurator. Print it once.
+Every figure above was produced by `dronePhysics.js` over the parts dataset; the assistant only says them.
 
 ---
 
-## The four pieces
+## Why
 
-| Folder | Engine | What it is |
+Anyone with a 3D printer, an ArduPilot flight controller and a weekend can build a working drone: a clinic's
+courier, a farm's mapper, a town's fire-watch. But printing is slow and failure is expensive. A frame takes hours
+to print and a day to finish; if the motor is too weak for the propeller or the battery too heavy for the frame,
+you find out at the first hover, with the aircraft on its back in the grass. A wrong printed part is scrap. The
+numbers you need are scattered across datasheets or made up by online calculators, and the design and the flight
+live in different tools.
+
+DroneX closes that loop with no printing in between: real parts with sources, a deterministic verdict, an
+assistant that explains it in plain words, and a simulator that flies *your* drone, not a stand-in, between real
+buildings. Iterate in minutes, print once.
+
+## How it works
+
+```
+                          ┌──────────────────────────── DroneX_render (Next.js + three.js) ──────────────────────────┐
+  builder ──voice/text──▶ │  configurator  ◀─ dronex:state / dronex:swap ─▶  Ask DroneX (Cartesia Ink in, Sonic out)  │
+                          │      │ parts dataset + dronePhysics.js (the verdict)        │ /api/assistant: tools over    │
+                          │      │                                                       │ the dataset and the physics   │
+                          │      └── Fly in simulation ──┐          /copilot: voice flight copilot + live airspace       │
+                          └───────────────────────────────┼──────────────────────────────────────────────────────────────┘
+                                                          │ JSON-RPC over a local unix socket
+  ASI:One user                                            ▼
+      │  Agent Chat Protocol          ┌──────── dronex/DroneX_1 (simulation engine) ─────────┐
+      ▼                               │  Core daemon (Rust) · ArduPilot SITL · Cesium 3D map │
+  DroneX_agents (Fetch.ai uAgents)    │  solid buildings from OpenStreetMap                  │
+  dispatcher · 8 fleet agents · ──────▶└──────────────────────────────┬───────────────────────┘
+  flight agent (via configurator API)                                 │ telemetry
+                                                    DroneX_live: mirror ──▶ SpacetimeDB (shared airspace, corridors)
+                                                                       └──▶ Elastic (flight analytics)
+```
+
+| Folder | What it is |
+|---|---|
+| [`DroneX_render/`](DroneX_render/) | The configurator, Ask DroneX, the Copilot and Dispatch pages, and the JSON API the other pieces use (Next.js 16, three.js). The parts dataset and the physics live in `prototype/drone-assembly/src/`. |
+| [`dronex/DroneX_1/`](dronex/DroneX_1/) | The simulation engine: a fork of UXDuck Core (Rust daemon, ArduPilot SITL, web UI over Cesium 3D tiles) with our account backend and solid buildings. `dronex/uxduck-core/` is the untouched upstream, for diffing. |
+| [`DroneX_live/`](DroneX_live/) | Mirrors every simulated vehicle into the **SpacetimeDB** shared airspace (corridor reservations and separation enforced in reducers) and the **Elastic** flight index. |
+| [`DroneX_agents/`](DroneX_agents/) | **DroneX Dispatch** on Fetch.ai: a dispatcher on Agentverse, one fleet agent per hangar drone, and a flight agent that waits for GPS, takes off, reserves a corridor and flies. Payment Protocol on testnet. |
+
+![The Dispatch page: the three engines, the agents and their addresses, and whether ASI:One can reach the dispatcher](docs/images/dispatch.png)
+
+### The rule everything follows
+
+**Code decides; models explain.** Whether a drone flies a mission is computed by `dronePhysics.js` from sourced
+part records; every computed number is labelled *est.*; unknown values stay `TODO(source)` instead of being
+guessed. The assistant, the copilot and the agents call tools that return those numbers and only put them into
+words. A swap is offered only after the physics has judged it.
+
+## Built with
+
+| Technology | What it does in DroneX | Where |
 |---|---|---|
-| `DroneX_render/` | Rendering | The landing page and the drone configurator (Next.js + three.js). Browse real drones, build them part by part, swap parts, test against missions, send to simulation. |
-| `dronex/DroneX_1/` | Simulation | A fork of UXDuck Core (Rust daemon, ArduPilot SITL, web UI over Cesium 3D tiles) with our own account backend and solid buildings. `dronex/uxduck-core/` is the untouched upstream for diffing. |
-| `DroneX_live/` | Live layer | The mirror on the simulator's socket feeding the **shared airspace (SpacetimeDB)**, where every operator's drones, corridors and incidents live under rules enforced next to the data, and the **flight analytics (Elastic)**, where every simulated flight, event and verdict is searchable and an agent finds the signal. |
-| `DroneX_agents/` | Agents | **DroneX Dispatch (Fetch.ai / ASI:One)**: a dispatcher, one fleet agent per hangar drone and a flight agent. A sentence in ASI:One becomes a verified, flying vehicle, with Interactive Cards along the way. |
+| **Cartesia** (Sonic TTS, Ink STT) | The voice of DroneX: Ask DroneX on the configurator (explain parts and missions, suggest swaps) and the flight copilot on `/copilot` (commands in, callouts out, barge-in). | `DroneX_render/src/components/assistant/`, `src/lib/ai/assistant.ts`, `src/components/copilot/` |
+| **Fetch.ai** (uAgents, Agentverse, ASI:One) | DroneX Dispatch: a sentence in ASI:One becomes a verified, flying vehicle; Interactive Cards; Payment Protocol with testnet FET checked on chain. The ASI:One model also parses intent. | `DroneX_agents/`, `DroneX_render/src/app/dispatch/` |
+| **SpacetimeDB** | The shared, persistent airspace: every vehicle, position, corridor and incident in tables; corridor grants and separation are reducers. | `DroneX_live/`, `DroneX_render/src/components/airspace/` |
+| **Elastic** | Flight analytics: fixes, events and verdicts indexed; ArduPilot's parameter manual and the physics notes as semantic text; an agent that finds the signal. | `DroneX_live/elastic/` |
+| **ArduPilot SITL** | The real flight code, in software in the loop. | `dronex/DroneX_1/` |
 
-The configurator also hosts the **voice copilot (Cartesia)** at `/copilot`: spoken commands in, callouts and
-warnings out, beside the live airspace. Every screen carries a "Built with" sidebar that says exactly what each
-technology does there and in which file; the registry is `DroneX_render/src/lib/tracks.ts`, and
-[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) records why each was chosen and what was assessed and set aside.
+Every screen has a **Built with** sidebar saying exactly what each technology does on that screen and in which
+file (`DroneX_render/src/lib/tracks.ts`). Why each was chosen, and what was assessed and set aside:
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+---
 
 ## Run it
 
+### Prerequisites
+
+- macOS or Linux, Node 24.11+, Rust (rustup), openssl
+- Python 3.11 and [uv](https://docs.astral.sh/uv/) for the agents (optional)
+- The SpacetimeDB CLI for the shared airspace (optional), an Elastic Cloud Serverless project for analytics (optional)
+
+### Install (once)
+
 ```sh
-# once
 (cd dronex/DroneX_1/backend && npm install)
 (cd DroneX_render && npm install)
 (cd DroneX_live && npm install)
-cp DroneX_render/.env.example DroneX_render/.env.local   # then fill in the keys you have
+uv venv --python python3.11 DroneX_agents/.venv
+uv pip install --python DroneX_agents/.venv/bin/python -r DroneX_agents/requirements.txt
 
-./dev.sh
+cp DroneX_render/.env.example DroneX_render/.env.local   # then fill in the keys you have
 ```
 
-Configurator: http://localhost:3000. Copilot: http://localhost:3000/copilot. Simulation: http://127.0.0.1:45010/.
-Pieces whose keys are missing say so and stay off; the rest runs. The agents need a Python 3.11 venv
-(`DroneX_agents/README.md`), the airspace the SpacetimeDB CLI (`DroneX_live/README.md`), the analytics an Elastic
-Cloud Serverless project (`DroneX_live/elastic/README.md`), the copilot a Cartesia key (`DroneX_render/docs/COPILOT.md`). Approve the simulation page's
-pairing code the first time:
+The ArduPilot SITL builds live in `dronex/DroneX_1/.dev/core-data/simulators/`;
+`dronex/DroneX_1/scripts/build-sitl.sh copter plane` builds them from ArduPilot's source.
+
+### Start everything
 
 ```sh
-UXDUCK_DATA_DIR=dronex/DroneX_1/.dev/core-data dronex/DroneX_1/core/target/debug/uxduck rpc call pairing/approve --json '{"code":"<code>"}'
+./dev.sh                  # simulator, configurator, live layer, agents
+NO_AGENTS=1 ./dev.sh      # without the Fetch.ai agents
+NO_LIVE=1 ./dev.sh        # without the SpacetimeDB / Elastic mirror
 ```
 
-Needs Rust (rustup), Node 24.11+ and openssl. The SITL builds live in
-`dronex/DroneX_1/.dev/core-data/simulators/` (`scripts/build-sitl.sh copter plane` builds them from
-ArduPilot's source). The simulation UI is served as immutable, so hard-reload that page once after the first
-run.
+| Open | URL |
+|---|---|
+| Configurator + Ask DroneX | http://localhost:3000 |
+| Voice flight copilot + live airspace | http://localhost:3000/copilot |
+| DroneX Dispatch status | http://localhost:3000/dispatch |
+| Simulator | http://127.0.0.1:45010 |
 
-## How the two connect
+The first time, the simulator page shows a pairing code; approve it with
+`UXDUCK_DATA_DIR=dronex/DroneX_1/.dev/core-data dronex/DroneX_1/core/target/debug/uxduck rpc call pairing/approve --json '{"code":"<code>"}'`.
+It is served as immutable, so hard-reload it once after the first run.
 
-- `DroneX_render/src/lib/sim/` talks to Core over its local unix socket (JSON-RPC, same user, no pairing):
-  `sim/start`, `vehicle/save`, `vehicle/size`, `vehicle/bookmarks`, `param/set`.
-- The model and design sent are kept in `DroneX_render/.dronex/sim/<id>/` and served by
-  `/api/sim/designs/<id>/model.glb`; the vehicle's "DroneX model" bookmark points there.
-- `dronex/DroneX_1/scripts/patch-interface-dronex.mjs` teaches the simulation UI's model lookup to draw a
-  vehicle from that bookmark (idempotent; `git checkout -- interface/` undoes it).
+### Keys (`DroneX_render/.env.local`)
 
-Docs: `DroneX_render/docs/` (spec, architecture, roadmap), `dronex/DroneX_1/docs/backend/` (the cloud API Core
-expects).
+Every process reads this one file. Pieces whose keys are missing say so and stay off; the rest runs.
+
+| Key | Needed for |
+|---|---|
+| `INTENT_API_KEY` (+ `INTENT_API_BASE`, `INTENT_MODEL`) | Ask DroneX, the copilot's commands, the dispatcher's intent parsing. ASI:One by default ([asi1.ai](https://asi1.ai/dashboard/api-keys)); any OpenAI-compatible endpoint works. |
+| `CARTESIA_API_KEY` (+ `CARTESIA_VOICE_ID`, `CARTESIA_TTS_MODEL`, `CARTESIA_STT_MODEL`) | Voice in and out. Without it, Ask DroneX and the copilot still work by typing. |
+| `SPACETIME_URI`, `SPACETIME_DB`, `NEXT_PUBLIC_SPACETIME_*` | The shared airspace ([DroneX_live/README.md](DroneX_live/README.md)). |
+| `ELASTIC_URL`, `ELASTIC_API_KEY`, `ELASTIC_INDEX_PREFIX` | Flight analytics ([DroneX_live/elastic/README.md](DroneX_live/elastic/README.md)). |
+| `DRONEX_*_SEED`, `AGENTVERSE_API_KEY`, `DRONEX_PAYMENTS*` | The Fetch.ai agents: stable addresses, the Agentverse mailbox, the Payment Protocol ([DroneX_agents/README.md](DroneX_agents/README.md)). |
+
+Keys are read on the server only; the browser gets short-lived Cartesia tokens.
+
+## Tests
+
+```sh
+cd DroneX_render && npm run typecheck && npm run lint && npm test     # 64 tests: physics, assistant tools, callouts...
+node DroneX_render/prototype/drone-assembly/scripts/check-drone-physics.mjs   # the physics against every preset
+DroneX_agents/.venv/bin/python -m pytest DroneX_agents                 # 35 tests: cards, missions, flight sequence, payments
+```
+
+## What it does not do yet
+
+- **The simulator flies ArduPilot's standard frames.** Your design sets the battery model, hover throttle and
+  airspeeds; mass distribution and motor thrust curves are not yet fed into the simulator's physics.
+- **No structural or aerodynamic analysis.** DroneX tells you whether the propulsion and energy budget closes,
+  not whether a printed arm will snap.
+- **The parts shelf is small**: 7 airframes, 10 motors, 9 propellers, 8 batteries, 5 payloads, all sourced.
+  Some missions have no passing build in it (the 15 km medical delivery, for one), and the assistant says so.
+- **Ask DroneX does one change per request** and the copilot one command per sentence: "take off, then go to
+  Coit Tower" takes off; say the go-to once it is airborne.
+- **Building avoidance is for multicopters**; planes and VTOLs fly straight in guided flight.
+- **Wind and weather are the simulator's defaults**, and flights start in San Francisco.
+- **ASI:One discovery of the dispatcher** is still being verified: the agent is listed on Agentverse with its
+  mailbox and answers through it, but ASI:One's API had not routed to it yet at the last test.
+
+## Documentation
+
+- [`DroneX_render/docs/SPEC.md`](DroneX_render/docs/SPEC.md): what the product does
+- [`DroneX_render/docs/ARCHITECTURE.md`](DroneX_render/docs/ARCHITECTURE.md): where things live
+- [`DroneX_render/docs/ROADMAP.md`](DroneX_render/docs/ROADMAP.md): phases, and what is in the current one
+- [`DroneX_agents/README.md`](DroneX_agents/README.md): DroneX Dispatch, pairing with Agentverse, testing through ASI:One
+- [`DroneX_live/README.md`](DroneX_live/README.md): the shared airspace and the analytics
+- [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md): every technology considered, what was chosen and why, and what testing found
+
+### How the configurator and the simulator connect
+
+`DroneX_render/src/lib/sim/` talks to Core over its local unix socket (JSON-RPC, same user, no pairing):
+`sim/start`, `vehicle/save`, `vehicle/size`, `vehicle/bookmarks`, `param/set`. The model and design sent are kept
+in `DroneX_render/.dronex/sim/<id>/` and served at `/api/sim/designs/<id>/model.glb`; the vehicle's "DroneX
+model" bookmark points there, and `dronex/DroneX_1/scripts/patch-interface-dronex.mjs` teaches the simulation UI
+to draw it (idempotent; `git checkout -- interface/` undoes it).
