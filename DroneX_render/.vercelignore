@@ -1,0 +1,7 @@
+# Never upload local settings, build output or the simulator's local design store to Vercel.
+.env*
+!.env.example
+.next
+node_modules
+.dronex
+.vercel

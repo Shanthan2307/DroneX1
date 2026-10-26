@@ -40,6 +40,7 @@ export const LIMITS = {
   dispatch: [{ limit: 30, windowMs: MIN }],
   dataset: [{ limit: 120, windowMs: MIN }],
   events: [{ limit: 20, windowMs: MIN }],
+  adminPin: [{ limit: 5, windowMs: 10 * MIN }],
 } satisfies Record<string, Window[]>;
 
 export type RouteName = keyof typeof LIMITS;
@@ -104,6 +105,12 @@ export class DailyBudget {
     this.used.set(provider, n + 1);
     return true;
   }
+
+  /** How many units `provider` has used today (0 on a new day). */
+  usedToday(provider: string): number {
+    const today = new Date(this.now()).toISOString().slice(0, 10);
+    return today === this.day ? (this.used.get(provider) ?? 0) : 0;
+  }
 }
 
 /** The visitor's address: the last X-Forwarded-For entry (Caddy's), else "local" (a loopback caller). */
@@ -145,6 +152,23 @@ export function dailyLimit(provider: Provider, env: Record<string, string | unde
   const [name, fallback] = BUDGET_ENV[provider];
   const v = Number(env[name]);
   return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
+export interface BudgetLine {
+  provider: Provider;
+  env: string;
+  limit: number;
+  used: number;
+}
+
+/** Today's use of every provider's budget, as counted by this server process (the admin dashboard). */
+export function budgetSnapshot(): BudgetLine[] {
+  return (Object.keys(BUDGET_ENV) as Provider[]).map((provider) => ({
+    provider,
+    env: BUDGET_ENV[provider][0],
+    limit: dailyLimit(provider),
+    used: budget().usedToday(provider),
+  }));
 }
 
 /** Null when the provider still has budget today (and takes one unit), else the 503. */
