@@ -7,10 +7,13 @@ import { isAgent } from "@/lib/agentAuth";
 import { act, type VehicleScope } from "@/lib/ai/intent";
 import { allowedVehicles } from "@/lib/ownership";
 import { limitRequest, spendBudget } from "@/lib/rateLimit";
+import { requireSimulator } from "@/lib/mode";
 
 const MAX_TEXT = 500;
 
 export async function POST(request: Request) {
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "intent");
   if (limited) return limited;
   let body: { text?: unknown; vehicleId?: unknown; lockVehicle?: unknown };

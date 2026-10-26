@@ -14,6 +14,9 @@ const MAX_NAME_CHARS = 80;
 const isTurn = (t: unknown): t is AssistantTurn =>
   typeof t === "object" && t !== null && ((t as AssistantTurn).role === "user" || (t as AssistantTurn).role === "assistant") && typeof (t as AssistantTurn).content === "string";
 
+// Up to five model rounds per answer: allow a minute on hosts that cut functions short (Vercel's default is lower).
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const limited = limitRequest(request, "assistant");
   if (limited) return limited;

@@ -4,9 +4,12 @@
 import { connection } from "next/server";
 import { requireAgent } from "@/lib/agentAuth";
 import { installPlans } from "@/lib/scenarios/run";
+import { requireSimulator } from "@/lib/mode";
 
 export async function POST(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const denied = requireAgent(request);
   if (denied) return denied;
   try {

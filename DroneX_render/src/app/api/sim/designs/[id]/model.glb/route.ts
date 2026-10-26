@@ -3,9 +3,12 @@
 import { connection } from "next/server";
 import { simCors, simPreflight } from "@/lib/cors";
 import { readModel } from "@/lib/sim/store";
+import { requireSimulator } from "@/lib/mode";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const { id } = await params;
   const model = await readModel(id);
   if (!model) return Response.json({ error: "no such model" }, { status: 404, headers: simCors() });

@@ -9,6 +9,7 @@ import { configuratorOrigin } from "@/lib/publicUrls";
 import { reserveSim, SIM_FULL, type Slot } from "@/lib/sim/sims";
 import { ownershipCookie } from "@/lib/ownership";
 import { clientIp, limitRequest } from "@/lib/rateLimit";
+import { requireSimulator } from "@/lib/mode";
 
 // Exported models measured so far are 0.05 to 6.1 MB (Tarot X6, modified), but the CineLog25 and the VTBIRD VTOL
 // have not been measured, so the 40 MB ceiling stays until they are (docs/DEPLOY.md item 32). Caddy caps the body
@@ -53,6 +54,8 @@ function readProfile(raw: unknown): SimProfile | string {
 }
 
 export async function POST(request: Request) {
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "fly");
   if (limited) return limited;
   if (Number(request.headers.get("content-length") ?? 0) > MODEL_MAX_BYTES + 1024 * 1024) return fail(413, "the model is too large");

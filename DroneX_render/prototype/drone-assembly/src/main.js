@@ -738,6 +738,19 @@ async function takeOff() {
 // server starts the simulation and the browser moves to the simulation page, open on that vehicle.
 async function flyInSim() {
   if (!isComplete() || choreo.state.busy || droneFlight.active || flyInSim.busy) return;
+  // The website-only deployment has no simulator (body.no-simulator, set by the app's AssemblyStage): say who to ask.
+  if (document.body.classList.contains("no-simulator")) {
+    const contact = document.body.dataset.simContact;
+    const ask = contact ? ` · to try it, email <a href="mailto:${f.esc(contact)}?subject=DroneX%20simulator">${f.esc(contact)}</a>` : "";
+    flyInSim.note = `<strong>The simulator is not part of this online demo</strong>${ask}`;
+    syncUi();
+    clearTimeout(flyInSim.timer);
+    flyInSim.timer = setTimeout(() => {
+      flyInSim.note = null;
+      syncUi();
+    }, 12000);
+    return;
+  }
   hangar.close();
   selector.clear();
   if (choreo.state.exploded && !(await choreo.assemble())) return;

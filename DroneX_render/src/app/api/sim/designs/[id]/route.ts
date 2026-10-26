@@ -3,9 +3,12 @@
 import { connection } from "next/server";
 import { limitRequest } from "@/lib/rateLimit";
 import { readFlight } from "@/lib/sim/store";
+import { requireSimulator } from "@/lib/mode";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "dataset");
   if (limited) return limited;
   const { id } = await params;

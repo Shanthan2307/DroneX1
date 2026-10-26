@@ -7,11 +7,14 @@ import { mayActOn } from "@/lib/ownership";
 import { limitRequest } from "@/lib/rateLimit";
 import { requestCorridor } from "@/lib/airspace/actions";
 import type { CorridorRequest } from "@/lib/airspace/types";
+import { requireSimulator } from "@/lib/mode";
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export async function POST(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "airspaceWrite");
   if (limited) return limited;
   let body: Partial<CorridorRequest>;

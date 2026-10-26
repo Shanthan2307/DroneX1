@@ -13,6 +13,8 @@ export async function register(): Promise<void> {
   }
   if (problems.length) throw new Error(`DroneX cannot start in production:\n- ${problems.join("\n- ")}`);
   for (const w of deployWarnings(process.env)) console.warn(`[dronex] ${w}`);
+  const { simulatorEnabled } = await import("./lib/mode");
+  if (!simulatorEnabled()) return; // website-only deployment: no simulator to reap
   const { startReapers } = await import("./lib/sim/sims");
   startReapers();
 }

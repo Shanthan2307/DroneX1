@@ -3,11 +3,14 @@
 import Link from "next/link";
 import DispatchPanel from "@/components/dispatch/DispatchPanel";
 import TracksPanel from "@/components/tracks/TracksPanel";
+import SimulatorOff from "@/components/SimulatorOff";
+import { contactEmail, simulatorEnabled } from "@/lib/mode";
 import { simulatorUrl } from "@/lib/publicUrls";
 
 export const metadata = { title: "DroneX Dispatch" };
 
 export default function DispatchPage() {
+  if (!simulatorEnabled()) return <SimulatorOff title="DroneX Dispatch" what="A sentence in ASI:One becomes a verified drone flying in the simulator, through the Fetch.ai agents." email={contactEmail()} />;
   return (
     <main style={{ minHeight: "100vh", background: "#0b0d12", color: "#e6e9ef" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 12px 140px", borderBottom: "1px solid #1c2130" }}>

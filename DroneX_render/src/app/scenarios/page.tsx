@@ -3,10 +3,13 @@
 import Link from "next/link";
 import ScenarioRunner from "@/components/scenarios/ScenarioRunner";
 import TracksPanel from "@/components/tracks/TracksPanel";
+import SimulatorOff from "@/components/SimulatorOff";
+import { contactEmail, simulatorEnabled } from "@/lib/mode";
 
 export const metadata = { title: "DroneX Scenarios" };
 
 export default function ScenariosPage() {
+  if (!simulatorEnabled()) return <SimulatorOff title="DroneX Scenarios" what="One real mission per sponsor technology, flown in the simulator over San Francisco." email={contactEmail()} />;
   return (
     <main style={{ minHeight: "100vh", background: "#0b0d12", color: "#e6e9ef" }}>
       <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 12px 140px", borderBottom: "1px solid #1c2130" }}>

@@ -10,9 +10,12 @@ import { isAgent } from "@/lib/agentAuth";
 import { allowedVehicles } from "@/lib/ownership";
 import { clientIp, limitRequest } from "@/lib/rateLimit";
 import { streamGate } from "@/lib/streams";
+import { requireSimulator } from "@/lib/mode";
 
 export async function GET(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "events");
   if (limited) return limited;
   const gateKey = isAgent(request) ? "agent" : clientIp(request.headers);

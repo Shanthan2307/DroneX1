@@ -9,6 +9,7 @@ import { connection } from "next/server";
 import { readDaemon } from "@/lib/sim/core";
 import type { DispatchStatus, DispatchAgentsFile } from "@/lib/dispatch/types";
 import { limitRequest } from "@/lib/rateLimit";
+import { requireSimulator } from "@/lib/mode";
 
 const CACHE_MS = 30_000;
 const g = globalThis as unknown as { __dronexDispatch?: { at: number; value: Promise<DispatchStatus> } };
@@ -47,6 +48,8 @@ type SearchHit = { address: string; name?: string; description?: string; readme?
 
 export async function GET(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "dispatch");
   if (limited) return limited;
   const cached = g.__dronexDispatch;

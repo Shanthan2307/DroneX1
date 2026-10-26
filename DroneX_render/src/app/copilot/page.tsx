@@ -4,11 +4,14 @@ import Link from "next/link";
 import AirspaceView from "@/components/airspace/AirspaceView";
 import VoiceCopilot from "@/components/copilot/VoiceCopilot";
 import TracksPanel from "@/components/tracks/TracksPanel";
+import SimulatorOff from "@/components/SimulatorOff";
+import { contactEmail, simulatorEnabled } from "@/lib/mode";
 import { simulatorUrl } from "@/lib/publicUrls";
 
 export const metadata = { title: "DroneX Copilot" };
 
 export default function CopilotPage() {
+  if (!simulatorEnabled()) return <SimulatorOff title="DroneX Copilot" what="Speak to fly: spoken commands and callouts for a drone in the simulator, beside the live shared airspace." email={contactEmail()} />;
   return (
     <main style={{ minHeight: "100vh", background: "#0b0d12", color: "#e6e9ef", display: "grid", gridTemplateColumns: "minmax(0, 1fr) 420px", gridTemplateRows: "auto minmax(0, 1fr)" }}>
       <header style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 20px 12px 140px", borderBottom: "1px solid #1c2130" }}>

@@ -6,9 +6,12 @@ import { requireAgent } from "@/lib/agentAuth";
 import { limitRequest } from "@/lib/rateLimit";
 import { assignMission } from "@/lib/airspace/actions";
 import type { MissionRequest } from "@/lib/airspace/types";
+import { requireSimulator } from "@/lib/mode";
 
 export async function POST(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const denied = requireAgent(request);
   if (denied) return denied;
   const limited = limitRequest(request, "airspaceWrite");

@@ -3,9 +3,12 @@
 import { connection } from "next/server";
 import { requireAgent } from "@/lib/agentAuth";
 import { stopVehicle } from "@/lib/sim/sims";
+import { requireSimulator } from "@/lib/mode";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const denied = requireAgent(request);
   if (denied) return denied;
   const { id } = await params;

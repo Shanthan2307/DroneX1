@@ -4,9 +4,12 @@ import { connection } from "next/server";
 import { mayActOn } from "@/lib/ownership";
 import { limitRequest } from "@/lib/rateLimit";
 import { NotYours, releaseCorridor } from "@/lib/airspace/actions";
+import { requireSimulator } from "@/lib/mode";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "airspaceWrite");
   if (limited) return limited;
   const { id } = await params;

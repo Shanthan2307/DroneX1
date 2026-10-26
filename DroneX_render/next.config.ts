@@ -48,6 +48,11 @@ const nextConfig: NextConfig = {
     ];
   },
   partialPrefetching: true,
+  // The home page reads the configurator's own index.html on the server (components/assembly/markup.ts); ship it with
+  // the server code on hosts that trace files (Vercel).
+  outputFileTracingIncludes: {
+    "/": ["./prototype/drone-assembly/index.html"],
+  },
   turbopack: {
     rules: {
       "*.css": {

@@ -4,9 +4,12 @@
 import { connection } from "next/server";
 import { withAirspace } from "@/lib/airspace/server";
 import { limitRequest } from "@/lib/rateLimit";
+import { requireSimulator } from "@/lib/mode";
 
 export async function GET(request: Request) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "airspaceRead");
   if (limited) return limited;
   try {

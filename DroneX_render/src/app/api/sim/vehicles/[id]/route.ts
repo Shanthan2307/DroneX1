@@ -13,6 +13,7 @@ import { limitRequest } from "@/lib/rateLimit";
 import { runTool } from "@/lib/ai/intent";
 import { isReady } from "@/lib/sim/ready";
 import { findPlace, listVehicles, telemetry, withCore } from "@/lib/sim/tools";
+import { requireSimulator } from "@/lib/mode";
 
 const TOOLS = new Set(["status", "takeoff", "goto_place", "set_mode", "return_to_launch", "land", "arm", "disarm"]);
 
@@ -25,6 +26,8 @@ const fail = (e: unknown, status = 502) => {
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const limited = limitRequest(request, "dataset");
   if (limited) return limited;
   const { id } = await params;
@@ -47,6 +50,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const denied = requireAgent(request);
   if (denied) return denied;
   const { id } = await params;

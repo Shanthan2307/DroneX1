@@ -10,9 +10,12 @@ import { reserveSim, SIM_FULL } from "@/lib/sim/sims";
 import { readFlight } from "@/lib/sim/store";
 import { configuratorOrigin } from "@/lib/publicUrls";
 import { clientIp } from "@/lib/rateLimit";
+import { requireSimulator } from "@/lib/mode";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   await connection();
+  const off = requireSimulator();
+  if (off) return off;
   const denied = requireAgent(request);
   if (denied) return denied;
   const { id } = await params;

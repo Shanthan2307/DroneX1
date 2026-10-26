@@ -1,9 +1,13 @@
 // What a production server must have before it takes requests (docs/DEPLOY.md item 16). The public URLs and the
 // browser's SpacetimeDB address are baked into the prerendered pages at build time, so they must also be set
 // during `next build`. Pure: takes the environment, returns the problems.
+import { simulatorInMode } from "./mode";
 
 export function deployProblems(env: Record<string, string | undefined>): string[] {
   const problems: string[] = [];
+  // The website-only deployment (lib/mode.ts) has no simulator, airspace writes or ownership cookie to configure;
+  // links use the origin each request arrives at unless DRONEX_PUBLIC_URL says otherwise.
+  if (!simulatorInMode(env.DRONEX_MODE)) return problems;
   const set = (k: string) => Boolean(env[k]?.trim());
   if (!set("DRONEX_PUBLIC_URL")) problems.push("DRONEX_PUBLIC_URL is not set (the configurator's public https origin)");
   if (!set("DRONEX_SIM_UI_URL")) problems.push("DRONEX_SIM_UI_URL is not set (the simulator's public https origin)");
@@ -15,6 +19,7 @@ export function deployProblems(env: Record<string, string | undefined>): string[
 /** Worth a warning but not a refusal to start. */
 export function deployWarnings(env: Record<string, string | undefined>): string[] {
   const out: string[] = [];
+  if (!simulatorInMode(env.DRONEX_MODE)) return out;
   if (!env.DRONEX_AGENT_TOKEN?.trim()) out.push("DRONEX_AGENT_TOKEN is not set: the agent-only routes refuse everyone");
   if (!env.SPACETIME_TOKEN?.trim() && !env.SPACETIME_TOKEN_FILE?.trim()) out.push("neither SPACETIME_TOKEN nor SPACETIME_TOKEN_FILE is set: airspace writes use a fresh identity each time");
   return out;
